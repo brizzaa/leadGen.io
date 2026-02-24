@@ -37,3 +37,9 @@ Thumbs.db
 # Docker
 .dockerignore
 Dockerfile
+
+
+tos.md
+privacy.md
+guides.md
+agents.md
