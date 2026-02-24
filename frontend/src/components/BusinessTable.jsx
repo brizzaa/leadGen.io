@@ -25,6 +25,7 @@ import {
   Loader2,
   Copy,
   XCircle,
+  Filter,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -130,6 +131,21 @@ function SortableHead({ label, k, sortKey, sortDir, onSort }) {
   );
 }
 
+function FilterableHead({ label, active, onToggle, className = "" }) {
+  return (
+    <TableHead
+      className={`cursor-pointer select-none whitespace-nowrap transition-all duration-300 group ${
+        active
+          ? "text-[#00d4aa] bg-[#00d4aa]/5 shadow-[inset_0_-2px_0_0_#00d4aa]"
+          : "hover:text-[#00d4aa]"
+      } ${className}`}
+      onClick={onToggle}
+    >
+      <span className="inline-flex items-center gap-1.5">{label}</span>
+    </TableHead>
+  );
+}
+
 const MotionTableRow = motion(TableRow);
 
 export default function BusinessTable({
@@ -151,6 +167,19 @@ export default function BusinessTable({
   const [isBatchScanning, setIsBatchScanning] = useState(false);
   const [batchProgress, setBatchProgress] = useState("");
   const [dialogConfig, setDialogConfig] = useState(null);
+  const [columnFilters, setColumnFilters] = useState({
+    phone: false,
+    email: false,
+    social: false,
+    website: false,
+  });
+
+  const toggleColumnFilter = (key) => {
+    setColumnFilters((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
 
   const [currentPage, setCurrentPage] = useState(1);
   const [direction, setDirection] = useState(0);
@@ -173,7 +202,7 @@ export default function BusinessTable({
   useEffect(() => {
     setCurrentPage(1);
     setDirection(0);
-  }, [debouncedSearch, statusFilter, sortKey, sortDir]);
+  }, [debouncedSearch, statusFilter, sortKey, sortDir, columnFilters]);
 
   // Debounce search update
   useEffect(() => {
@@ -217,6 +246,20 @@ export default function BusinessTable({
       if (statusFilter !== "Tutti" && currentStatus !== statusFilter) {
         return false;
       }
+
+      // Column filters
+      if (columnFilters.phone && !b.phone) return false;
+      if (columnFilters.email && !b.email) return false;
+      if (columnFilters.social && !b.facebook_url && !b.instagram_url)
+        return false;
+      if (columnFilters.website) {
+        const hasWeb =
+          b.website &&
+          !b.website.toLowerCase().includes("facebook.com") &&
+          !b.website.toLowerCase().includes("instagram.com");
+        if (!hasWeb) return false;
+      }
+
       if (!debouncedSearch) return true;
       const q = debouncedSearch.toLowerCase();
       return (
@@ -645,10 +688,28 @@ export default function BusinessTable({
                   sortDir={sortDir}
                   onSort={handleSort}
                 />
-                <TableHead>Telefono</TableHead>
-                <TableHead className="text-center">Email</TableHead>
-                <TableHead className="text-center">Social</TableHead>
-                <TableHead>Sito Web</TableHead>
+                <FilterableHead
+                  label="Telefono"
+                  active={columnFilters.phone}
+                  onToggle={() => toggleColumnFilter("phone")}
+                />
+                <FilterableHead
+                  label="Email"
+                  active={columnFilters.email}
+                  onToggle={() => toggleColumnFilter("email")}
+                  className="text-center"
+                />
+                <FilterableHead
+                  label="Social"
+                  active={columnFilters.social}
+                  onToggle={() => toggleColumnFilter("social")}
+                  className="text-center"
+                />
+                <FilterableHead
+                  label="Sito Web"
+                  active={columnFilters.website}
+                  onToggle={() => toggleColumnFilter("website")}
+                />
                 <TableHead />
               </TableRow>
             </TableHeader>
