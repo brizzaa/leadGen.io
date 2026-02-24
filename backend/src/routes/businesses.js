@@ -18,6 +18,7 @@ router.get("/", (req, res) => {
       unclaimedOnly,
       search,
       status,
+      groupId,
     } = req.query;
 
     const db = getDb();
@@ -27,6 +28,12 @@ router.get("/", (req, res) => {
     if (status && status !== "Tutti") {
       whereClauses.push("status = ?");
       params.push(status);
+    }
+    if (groupId) {
+      whereClauses.push(
+        "id IN (SELECT business_id FROM business_groups WHERE group_id = ?)",
+      );
+      params.push(groupId);
     }
     if (area) {
       whereClauses.push("LOWER(area) LIKE ?");

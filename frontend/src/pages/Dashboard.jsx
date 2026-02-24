@@ -21,6 +21,7 @@ const API_URL = import.meta.env.VITE_API_URL || "";
 
 export default function Dashboard() {
   const [businesses, setBusinesses] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [progressMessages, setProgressMessages] = useState([]);
   const [toast, setToast] = useState(null);
@@ -31,6 +32,7 @@ export default function Dashboard() {
     unclaimedOnly: false,
     status: "Tutti",
     search: "",
+    groupId: null,
   });
 
   const showToast = (message, type = "success") => {
@@ -48,6 +50,7 @@ export default function Dashboard() {
         unclaimedOnly: filters.unclaimedOnly,
         status: filters.status,
         search: filters.search || "",
+        ...(filters.groupId && { groupId: filters.groupId }),
       });
 
       const res = await fetch(`${API_URL}/api/businesses?${params.toString()}`);
@@ -67,9 +70,22 @@ export default function Dashboard() {
     }
   }, [filters]);
 
+  const fetchGroups = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/groups`);
+      if (res.ok) {
+        const data = await res.json();
+        setGroups(data);
+      }
+    } catch (err) {
+      console.error("Error fetching groups:", err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchBusinesses();
-  }, [fetchBusinesses]);
+    fetchGroups();
+  }, [fetchBusinesses, fetchGroups]);
 
   const handleSearch = async ({ area, category }) => {
     setIsLoading(true);
@@ -217,6 +233,8 @@ export default function Dashboard() {
             isLoading={isLoading}
             filters={filters}
             onFiltersChange={setFilters}
+            groups={groups}
+            onRefreshGroups={fetchGroups}
           />
           {progressMessages.length > 0 && (
             <AnimatePresence>
@@ -243,6 +261,7 @@ export default function Dashboard() {
               onDeleteBatch={handleDeleteBatch}
               onStatusUpdate={handleStatusUpdate}
               onRefresh={fetchBusinesses}
+              groups={groups}
             />
           </section>
         </motion.div>

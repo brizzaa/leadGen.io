@@ -32,69 +32,27 @@ export function getDb() {
         instagram_url TEXT,
         social_last_active TEXT,
         last_social_scan_at DATETIME,
+        is_blacklisted INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(name, address)
       );
+
+      CREATE TABLE IF NOT EXISTS groups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        color TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS business_groups (
+        business_id INTEGER,
+        group_id INTEGER,
+        PRIMARY KEY (business_id, group_id),
+        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+        FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+      );
     `);
-
-    // Auto-migration for existing DBs
-    try {
-      db.exec(
-        "ALTER TABLE businesses ADD COLUMN status TEXT DEFAULT 'Da Contattare'",
-      );
-    } catch (e) {
-      // Ignored if column already exists
-    }
-
-    try {
-      db.exec("ALTER TABLE businesses ADD COLUMN is_claimed INTEGER DEFAULT 1");
-    } catch (e) {
-      // Ignored
-    }
-
-    try {
-      db.exec("ALTER TABLE businesses ADD COLUMN notes TEXT");
-    } catch (e) {
-      // Ignored
-    }
-
-    try {
-      db.exec("ALTER TABLE businesses ADD COLUMN next_contact DATETIME");
-    } catch (e) {
-      // Ignored
-    }
-
-    try {
-      db.exec("ALTER TABLE businesses ADD COLUMN facebook_url TEXT");
-    } catch (e) {
-      // Ignored
-    }
-
-    try {
-      db.exec("ALTER TABLE businesses ADD COLUMN instagram_url TEXT");
-    } catch (e) {
-      // Ignored
-    }
-
-    try {
-      db.exec("ALTER TABLE businesses ADD COLUMN social_last_active TEXT");
-    } catch (e) {
-      // Ignored
-    }
-
-    try {
-      db.exec("ALTER TABLE businesses ADD COLUMN last_social_scan_at DATETIME");
-    } catch (e) {
-      // Ignored
-    }
-
-    try {
-      db.exec(
-        "ALTER TABLE businesses ADD COLUMN is_blacklisted INTEGER DEFAULT 0",
-      );
-    } catch (e) {
-      // Ignored
-    }
   }
   return db;
 }

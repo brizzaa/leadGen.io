@@ -8,7 +8,9 @@ import {
   SlidersHorizontal,
   Zap,
   XCircle,
+  Folder,
 } from "lucide-react";
+import GroupManager from "./GroupManager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,6 +62,8 @@ export default function SearchPanel({
   isLoading,
   filters,
   onFiltersChange,
+  groups = [],
+  onRefreshGroups,
 }) {
   const [area, setArea] = useState("");
   const [category, setCategory] = useState("");
@@ -110,11 +114,14 @@ export default function SearchPanel({
         <div className="search-panel-header__icon">
           <Search className="w-5 h-5 text-[#0a0f1e]" />
         </div>
-        <div>
-          <CardTitle className="search-panel-title">Trova Business</CardTitle>
-          <CardDescription className="search-panel-desc">
-            Cerca attività locali su Google Maps e identifica i lead migliori
-          </CardDescription>
+        <div className="flex items-center justify-between w-full">
+          <div>
+            <CardTitle className="search-panel-title">Trova Business</CardTitle>
+            <CardDescription className="search-panel-desc">
+              Cerca attività locali su Google Maps e identifica i lead migliori
+            </CardDescription>
+          </div>
+          <GroupManager groups={groups} onRefresh={onRefreshGroups} />
         </div>
       </CardHeader>
 
@@ -224,6 +231,37 @@ export default function SearchPanel({
                       Vinto (Cliente)
                     </SelectItem>
                     <SelectItem value="Perso">Perso</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="filter-label whitespace-nowrap">Gruppo:</span>
+                <Select
+                  value={filters.groupId || "all"}
+                  onValueChange={(val) =>
+                    onFiltersChange({
+                      ...filters,
+                      groupId: val === "all" ? null : val,
+                    })
+                  }
+                >
+                  <SelectTrigger className="search-input w-[160px] h-9">
+                    <SelectValue placeholder="Tutti" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tutti i gruppi</SelectItem>
+                    {groups.map((g) => (
+                      <SelectItem key={g.id} value={g.id.toString()}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: g.color }}
+                          />
+                          {g.name}
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

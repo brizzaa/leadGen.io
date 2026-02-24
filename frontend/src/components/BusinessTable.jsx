@@ -138,6 +138,7 @@ export default function BusinessTable({
   onDeleteBatch,
   onStatusUpdate,
   onRefresh,
+  groups = [],
 }) {
   const [localSearch, setLocalSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -358,6 +359,23 @@ export default function BusinessTable({
     }
   };
 
+  const handleBatchAddToGroup = async (groupId) => {
+    if (selectedIds.length === 0) return;
+    try {
+      const res = await fetch(`${API_URL}/api/groups/${groupId}/batch-add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessIds: selectedIds }),
+      });
+      if (res.ok) {
+        setSelectedIds([]);
+        onRefresh();
+      }
+    } catch (error) {
+      console.error("Error batch adding to group:", error);
+    }
+  };
+
   const confirmDelete = () => {
     if (itemToDelete === "batch") {
       onDeleteBatch(selectedIds);
@@ -449,15 +467,45 @@ export default function BusinessTable({
             </SelectContent>
           </Select>
           {selectedIds.length > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleBatchDelete}
-              className="toolbar-btn text-destructive-foreground"
-            >
-              <Trash2 className="w-3.5 h-3.5 mr-1" />
-              Elimina {selectedIds.length} selezionati
-            </Button>
+            <div className="flex items-center gap-2">
+              <Select onValueChange={handleBatchAddToGroup}>
+                <SelectTrigger className="h-9 w-[180px] bg-primary/10 border-primary/20 text-primary font-medium">
+                  <div className="flex items-center gap-2">
+                    <Folder className="w-3.5 h-3.5 text-primary" />
+                    <span>Aggiungi a Gruppo</span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {groups.length === 0 ? (
+                    <div className="p-2 text-xs text-muted-foreground italic text-center">
+                      Crea un gruppo nel pannello di ricerca
+                    </div>
+                  ) : (
+                    groups.map((group) => (
+                      <SelectItem key={group.id} value={group.id.toString()}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: group.color }}
+                          />
+                          {group.name}
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBatchDelete}
+                className="toolbar-btn text-destructive-foreground h-9"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                Elimina {selectedIds.length}
+              </Button>
+            </div>
           )}
           <Button
             id="refresh-btn"

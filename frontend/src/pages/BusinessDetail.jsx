@@ -30,6 +30,7 @@ import EditableInfoCard from "@/components/business/EditableInfoCard";
 import CRMSection from "@/components/business/CRMSection";
 import AIGeneratorSection from "@/components/business/AIGeneratorSection";
 import SocialSection from "@/components/business/SocialSection";
+import BusinessGroupsSection from "@/components/business/BusinessGroupsSection";
 import "../App.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -84,6 +85,9 @@ export default function BusinessDetail() {
   const [editWebsiteValue, setEditWebsiteValue] = useState("");
   const [isSavingWebsite, setIsSavingWebsite] = useState(false);
 
+  const [allGroups, setAllGroups] = useState([]);
+  const [businessGroups, setBusinessGroups] = useState([]);
+
   // Status state
   const [status, setStatus] = useState("Da Contattare");
   const [promptType, setPromptType] = useState("social_only");
@@ -121,9 +125,35 @@ export default function BusinessDetail() {
     }
   }, [id]);
 
+  const fetchGroups = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/groups`);
+      if (res.ok) {
+        const data = await res.json();
+        setAllGroups(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  const fetchBusinessGroups = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/groups/business/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setBusinessGroups(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, [id]);
+
   useEffect(() => {
     fetchBusiness();
-  }, [fetchBusiness]);
+    fetchGroups();
+    fetchBusinessGroups();
+  }, [fetchBusiness, fetchGroups, fetchBusinessGroups]);
 
   const handleSaveDetails = async () => {
     setIsSavingDetails(true);
@@ -439,6 +469,12 @@ export default function BusinessDetail() {
           />
 
           <SocialSection business={business} />
+          <BusinessGroupsSection
+            businessId={id}
+            allGroups={allGroups}
+            currentGroups={businessGroups}
+            onRefresh={fetchBusinessGroups}
+          />
         </div>
 
         <CRMSection

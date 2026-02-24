@@ -28,53 +28,65 @@ export default function SocialSection({ business }) {
   if (socials.length === 0 && !business.maps_url) return null;
 
   return (
-    <div className="p-6 rounded-xl border border-border/50 bg-card shadow-sm space-y-4 h-full flex flex-col justify-between">
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-primary font-semibold">
-          <Share2 className="w-5 h-5" />
-          <h3 className="text-sm uppercase tracking-wider">Social & Links</h3>
-        </div>
+    <TooltipProvider>
+      <div className="p-5 rounded-xl border border-border/50 bg-card shadow-sm hover:border-primary/20 hover:shadow-md transition-all duration-300 group hover:-translate-y-1 h-full flex flex-col justify-between">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <div className="text-primary/70 group-hover:text-primary group-hover:scale-110 transition-all duration-300">
+                <Share2 className="w-4 h-4" />
+              </div>
+              <span className="text-xs font-medium uppercase tracking-wider">
+                Social & Links
+              </span>
+            </div>
 
-        {socials.length > 0 ? (
-          <div className="flex gap-3">
-            <TooltipProvider>
-              {socials.map((social) => (
+            {business.maps_url && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <a
+                    href={business.maps_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary/70 hover:text-primary transition-all duration-300 hover:scale-110"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </TooltipTrigger>
+                <TooltipContent>Apri con Maps</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            {socials.length > 0 ? (
+              socials.map((social) => (
                 <Tooltip key={social.id}>
                   <TooltipTrigger asChild>
                     <a
                       href={social.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`p-3 rounded-xl border border-border/50 transition-all duration-300 ${social.color} bg-background/50 hover:scale-110`}
+                      className={`p-2.5 rounded-xl border border-border/50 transition-all duration-300 ${social.color} bg-background/50 hover:scale-110`}
                     >
-                      {social.icon}
+                      {React.cloneElement(social.icon, {
+                        className: "w-4 h-4",
+                      })}
                     </a>
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs break-all">
                     {social.url}
                   </TooltipContent>
                 </Tooltip>
-              ))}
-            </TooltipProvider>
+              ))
+            ) : (
+              <p className="text-[10px] text-muted-foreground/60 italic uppercase tracking-tight">
+                Nessun profilo rilevato
+              </p>
+            )}
           </div>
-        ) : (
-          <p className="text-xs text-muted-foreground italic">
-            Nessun profilo social rilevato
-          </p>
-        )}
+        </div>
       </div>
-
-      {business.maps_url && (
-        <a
-          href={business.maps_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 text-sm font-medium text-primary hover:underline mt-4 group"
-        >
-          <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-          Apri su Google Maps
-        </a>
-      )}
-    </div>
+    </TooltipProvider>
   );
 }

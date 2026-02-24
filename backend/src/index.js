@@ -6,6 +6,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import searchRouter from "./routes/search.js";
 import businessesRouter from "./routes/businesses.js";
+import groupsRouter from "./routes/groups.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -20,6 +21,7 @@ app.use(express.json());
 
 app.use("/api/search", searchRouter);
 app.use("/api/businesses", businessesRouter);
+app.use("/api/groups", groupsRouter);
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));
 
