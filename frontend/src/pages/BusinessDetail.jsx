@@ -31,6 +31,7 @@ import CRMSection from "@/components/business/CRMSection";
 import AIGeneratorSection from "@/components/business/AIGeneratorSection";
 import SocialSection from "@/components/business/SocialSection";
 import BusinessGroupsSection from "@/components/business/BusinessGroupsSection";
+import ActivityTimeline from "@/components/business/ActivityTimeline";
 import "../App.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -485,6 +486,8 @@ export default function BusinessDetail() {
           onSave={handleSaveDetails}
           isSaving={isSavingDetails}
         />
+
+        <ActivityTimeline businessId={id} />
 
         <AIGeneratorSection
           business={business}

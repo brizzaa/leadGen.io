@@ -1,19 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Building2,
-  Globe,
-  Facebook,
-  Mail,
   CheckCircle2,
   XCircle,
   MapPin,
+  LayoutGrid,
+  List,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import SearchPanel from "../components/SearchPanel";
 import ProgressLog from "../components/ProgressLog";
 import BusinessTable from "../components/BusinessTable";
+import KanbanBoard from "../components/KanbanBoard";
+import RemindersWidget from "../components/RemindersWidget";
 import { ModeToggle } from "../components/ModeToggle";
 import "../App.css";
 
@@ -25,6 +25,9 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [progressMessages, setProgressMessages] = useState([]);
   const [toast, setToast] = useState(null);
+  const [viewMode, setViewMode] = useState(
+    () => localStorage.getItem("leadgen-view") || "table",
+  );
   const [filters, setFilters] = useState({
     noWebsite: false,
     facebookOnly: false,
@@ -34,6 +37,11 @@ export default function Dashboard() {
     search: "",
     groupId: null,
   });
+
+  const setView = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem("leadgen-view", mode);
+  };
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -249,20 +257,67 @@ export default function Dashboard() {
             </AnimatePresence>
           )}
           <section className="results-section">
-            <h2 className="section-title">
-              Business Trovati
-              <span className="section-subtitle">
-                {businesses.length} totali trovati
-              </span>
-            </h2>
-            <BusinessTable
-              businesses={businesses}
-              onDelete={handleDelete}
-              onDeleteBatch={handleDeleteBatch}
-              onStatusUpdate={handleStatusUpdate}
-              onRefresh={fetchBusinesses}
-              groups={groups}
-            />
+            <div className="flex items-center justify-between">
+              <h2 className="section-title">
+                Business Trovati
+                <span className="section-subtitle">
+                  {businesses.length} totali trovati
+                </span>
+              </h2>
+              {/* View toggle */}
+              <div className="view-toggle">
+                <button
+                  onClick={() => setView("table")}
+                  className={`view-toggle__btn ${viewMode === "table" ? "view-toggle__btn--active" : ""}`}
+                  title="Vista Tabella"
+                >
+                  <List className="w-4 h-4" />
+                  <span>Tabella</span>
+                </button>
+                <button
+                  onClick={() => setView("kanban")}
+                  className={`view-toggle__btn ${viewMode === "kanban" ? "view-toggle__btn--active" : ""}`}
+                  title="Vista Kanban"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                  <span>Kanban</span>
+                </button>
+              </div>
+            </div>
+
+            <AnimatePresence mode="wait">
+              {viewMode === "table" ? (
+                <motion.div
+                  key="table"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <BusinessTable
+                    businesses={businesses}
+                    onDelete={handleDelete}
+                    onDeleteBatch={handleDeleteBatch}
+                    onStatusUpdate={handleStatusUpdate}
+                    onRefresh={fetchBusinesses}
+                    groups={groups}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="kanban"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <KanbanBoard
+                    businesses={businesses}
+                    onStatusUpdate={handleStatusUpdate}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </section>
         </motion.div>
       </main>
@@ -277,6 +332,8 @@ export default function Dashboard() {
           <span>{toast.message}</span>
         </div>
       )}
+
+      <RemindersWidget />
     </div>
   );
 }

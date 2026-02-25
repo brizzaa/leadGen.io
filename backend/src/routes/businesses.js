@@ -6,6 +6,18 @@ import { scanSocial, scanSocialBatch } from "../socialScanner.js";
 
 const router = express.Router();
 
+// Helper per creare un activity log
+function logActivity(businessId, type, message, meta = null) {
+  try {
+    const db = getDb();
+    db.prepare(
+      "INSERT INTO activity_logs (business_id, type, message, meta) VALUES (?, ?, ?, ?)",
+    ).run(businessId, type, message, meta ? JSON.stringify(meta) : null);
+  } catch (e) {
+    console.error("[activity-log] Error:", e.message);
+  }
+}
+
 // GET /api/businesses
 router.get("/", (req, res) => {
   try {
@@ -226,12 +238,25 @@ router.patch("/:id/status", (req, res) => {
     return res.status(400).json({ error: "status is required" });
   }
   const db = getDb();
+  const old = db
+    .prepare("SELECT status FROM businesses WHERE id = ?")
+    .get(req.params.id);
   const stmt = db.prepare("UPDATE businesses SET status = ? WHERE id = ?");
   const result = stmt.run(status, req.params.id);
 
   if (result.changes === 0) {
     return res.status(404).json({ error: "Business not found" });
   }
+
+  // Auto-log status change
+  if (old && old.status !== status) {
+    logActivity(
+      req.params.id,
+      "status",
+      `Stato cambiato: "${old.status}" → "${status}"`,
+    );
+  }
+
   res.json({ success: true, status });
 });
 
@@ -287,6 +312,20 @@ router.patch("/:id/details", (req, res) => {
     return res.status(404).json({ error: "Business not found" });
   }
   res.json({ success: true, notes, next_contact });
+});
+
+// PATCH /api/businesses/:id/next-contact — Solo data follow-up, senza toccare le note
+router.patch("/:id/next-contact", (req, res) => {
+  const { next_contact } = req.body;
+  const db = getDb();
+  const result = db
+    .prepare("UPDATE businesses SET next_contact = ? WHERE id = ?")
+    .run(next_contact ?? "", req.params.id);
+
+  if (result.changes === 0) {
+    return res.status(404).json({ error: "Business not found" });
+  }
+  res.json({ success: true, next_contact });
 });
 
 // PATCH /api/businesses/:id/opt-out (GDPR Compliance)
@@ -566,10 +605,16 @@ router.post("/:id/send-email", async (req, res) => {
 
     await transporter.sendMail(mailOptions);
 
-    const db = getDb();
-    db.prepare(
-      "UPDATE businesses SET status = 'Inviata Mail' WHERE id = ?",
-    ).run(req.params.id);
+    const db2 = getDb();
+    db2
+      .prepare("UPDATE businesses SET status = 'Inviata Mail' WHERE id = ?")
+      .run(req.params.id);
+
+    // Auto-log email sent
+    logActivity(req.params.id, "email", `Email inviata a: ${toEmail}`, {
+      subject,
+      toEmail,
+    });
 
     res.json({ success: true, message: "Email inviata con successo!" });
   } catch (error) {

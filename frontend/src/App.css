@@ -812,3 +812,303 @@
     width: 100% !important;
   }
 }
+
+/* ============================================================
+   VIEW TOGGLE (Tabella / Kanban)
+   ============================================================ */
+.view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.view-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.view-toggle__btn:hover {
+  color: hsl(var(--foreground));
+}
+
+.view-toggle__btn--active {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* ============================================================
+   KANBAN BOARD
+   ============================================================ */
+.kanban-board {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 16px;
+  align-items: flex-start;
+  justify-content: center;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.kanban-column {
+  flex: 0 0 260px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  overflow: hidden;
+  transition: box-shadow var(--transition);
+}
+
+.kanban-column--over {
+  box-shadow: 0 0 0 2px hsl(var(--ring));
+}
+
+.kanban-column__header {
+  padding: 10px 14px;
+  border-bottom: 1px solid hsl(var(--border));
+  border-top-width: 2px;
+  border-top-style: solid;
+}
+
+.kanban-column__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  min-height: 100px;
+  flex: 1;
+}
+
+.kanban-drop-indicator {
+  height: 3px;
+  background: hsl(var(--ring));
+  border-radius: 99px;
+  margin-bottom: 4px;
+  animation: kanban-pulse 1s ease-in-out infinite;
+}
+
+@keyframes kanban-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.kanban-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 12px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  gap: 4px;
+  min-height: 80px;
+}
+
+.kanban-card {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-sm);
+  padding: 9px 9px 9px 5px;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  cursor: grab;
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition),
+    opacity var(--transition);
+  user-select: none;
+}
+
+.kanban-card:hover {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+.kanban-card--dragging {
+  opacity: 0.35;
+  cursor: grabbing;
+  transform: rotate(1.5deg) scale(1.02);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.kanban-card__grip {
+  padding-top: 1px;
+  flex-shrink: 0;
+}
+
+.kanban-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ============================================================
+   REMINDERS WIDGET (campanella flottante + pannello)
+   ============================================================ */
+.reminder-bell {
+  position: fixed;
+  bottom: 28px;
+  left: 28px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 200;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transition:
+    transform var(--transition),
+    box-shadow var(--transition);
+}
+
+.reminder-bell:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+.reminder-bell__badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  background: hsl(0 84.2% 60.2%);
+  color: white;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  border: 2px solid hsl(var(--background));
+}
+
+.reminder-panel {
+  position: fixed;
+  right: 0;
+  top: 72px;
+  bottom: 0;
+  width: 360px;
+  background: hsl(var(--card));
+  border-left: 1px solid hsl(var(--border));
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.2);
+}
+
+.reminder-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid hsl(var(--border));
+  flex-shrink: 0;
+}
+
+.reminder-panel__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.reminder-item {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-sm);
+  padding: 11px 12px;
+  cursor: pointer;
+  transition:
+    border-color var(--transition),
+    transform var(--transition);
+}
+
+.reminder-item:hover {
+  border-color: hsl(var(--ring));
+  transform: translateX(-2px);
+}
+
+.reminder-item--overdue {
+  border-color: hsl(0 84.2% 60.2% / 0.35);
+  background: hsl(0 84.2% 60.2% / 0.04);
+}
+
+.reminder-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  text-decoration: none;
+  transition: all var(--transition);
+}
+
+.reminder-quick-btn:hover {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--ring));
+}
+
+/* ============================================================
+   RESPONSIVE KANBAN & REMINDERS
+   ============================================================ */
+@media (max-width: 900px) {
+  .kanban-board {
+    gap: 10px;
+  }
+  .kanban-column {
+    flex: 0 0 220px;
+    min-width: 220px;
+  }
+}
+
+@media (max-width: 640px) {
+  .reminder-panel {
+    width: 100vw;
+  }
+  .view-toggle span {
+    display: none;
+  }
+  .view-toggle__btn {
+    padding: 5px 8px;
+  }
+}
