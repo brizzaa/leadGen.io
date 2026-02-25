@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import SearchPanel from "../components/SearchPanel";
 import ProgressLog from "../components/ProgressLog";
+import TableFilters from "../components/TableFilters";
 import BusinessTable from "../components/BusinessTable";
 import KanbanBoard from "../components/KanbanBoard";
 import RemindersWidget from "../components/RemindersWidget";
@@ -239,8 +240,6 @@ export default function Dashboard() {
             onSearch={handleSearch}
             onStop={handleStop}
             isLoading={isLoading}
-            filters={filters}
-            onFiltersChange={setFilters}
             groups={groups}
             onRefreshGroups={fetchGroups}
           />
@@ -284,6 +283,12 @@ export default function Dashboard() {
                 </button>
               </div>
             </div>
+
+            <TableFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+              groups={groups}
+            />
 
             <AnimatePresence mode="wait">
               {viewMode === "table" ? (

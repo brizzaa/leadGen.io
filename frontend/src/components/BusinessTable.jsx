@@ -156,9 +156,6 @@ export default function BusinessTable({
   onRefresh,
   groups = [],
 }) {
-  const [localSearch, setLocalSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("Tutti");
   const [sortKey, setSortKey] = useState("created_at");
   const [sortDir, setSortDir] = useState("desc");
   const [selectedIds, setSelectedIds] = useState([]);
@@ -188,29 +185,11 @@ export default function BusinessTable({
   const navigate = useNavigate();
   const tableRef = useRef(null);
 
-  // Load saved search from sessionStorage if returning from detail
-  useEffect(() => {
-    const savedSearch = sessionStorage.getItem("returnToSearch");
-    if (savedSearch) {
-      setLocalSearch(savedSearch);
-      setDebouncedSearch(savedSearch);
-      sessionStorage.removeItem("returnToSearch");
-    }
-  }, []);
-
-  // Reset page when filtering or sorting
+  // Reset page when sorting or filtering columns
   useEffect(() => {
     setCurrentPage(1);
     setDirection(0);
-  }, [debouncedSearch, statusFilter, sortKey, sortDir, columnFilters]);
-
-  // Debounce search update
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(localSearch);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [localSearch]);
+  }, [sortKey, sortDir, columnFilters]);
 
   const handlePageChange = (newPage) => {
     setDirection(newPage > currentPage ? 1 : -1);
@@ -239,14 +218,6 @@ export default function BusinessTable({
 
   const filtered = businesses
     .filter((b) => {
-      // Per il filtro di default ("Da Contattare"), trattiamo anche status non validi come "Da Contattare"
-      const currentStatus = STATUS_COLORS[b.status]
-        ? b.status
-        : "Da Contattare";
-      if (statusFilter !== "Tutti" && currentStatus !== statusFilter) {
-        return false;
-      }
-
       // Column filters
       if (columnFilters.phone && !b.phone) return false;
       if (columnFilters.email && !b.email) return false;
@@ -260,16 +231,7 @@ export default function BusinessTable({
         if (!hasWeb) return false;
       }
 
-      if (!debouncedSearch) return true;
-      const q = debouncedSearch.toLowerCase();
-      return (
-        b.name?.toLowerCase().includes(q) ||
-        b.address?.toLowerCase().includes(q) ||
-        b.category?.toLowerCase().includes(q) ||
-        b.area?.toLowerCase().includes(q) ||
-        b.phone?.toLowerCase().includes(q) ||
-        b.email?.toLowerCase().includes(q)
-      );
+      return true;
     })
     .sort((a, b) => {
       let aVal = a[sortKey] ?? "";
@@ -439,76 +401,8 @@ export default function BusinessTable({
           <Badge variant="outline" className="badge-count">
             {filtered.length} risultati
           </Badge>
-          {localSearch && (
-            <Badge variant="secondary" className="badge-filtered">
-              filtrati da {businesses.length}
-            </Badge>
-          )}
         </div>
         <div className="business-table-actions">
-          <div className="relative flex items-center w-full group">
-            <AnimatePresence mode="wait">
-              {localSearch ? (
-                <motion.button
-                  key="clear-table"
-                  initial={{ opacity: 0, scale: 0.8, rotate: -45 }}
-                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                  exit={{ opacity: 0, scale: 0.8, rotate: 45 }}
-                  transition={{ duration: 0.15 }}
-                  type="button"
-                  onClick={() => {
-                    setLocalSearch("");
-                    setDebouncedSearch("");
-                  }}
-                  className="absolute left-[14px] z-10 text-muted-foreground hover:text-primary transition-colors flex items-center justify-center p-0 border-none bg-transparent"
-                  title="Cancella ricerca"
-                >
-                  <XCircle className="w-4 h-4" />
-                </motion.button>
-              ) : (
-                <motion.div
-                  key="search-table"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute left-[14px] z-10 pointer-events-none"
-                >
-                  <Search className="w-4 h-4 text-muted-foreground" />
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <Input
-              id="table-search-input"
-              type="text"
-              placeholder="Cerca per nome, città, telefono..."
-              value={localSearch}
-              onChange={(e) => {
-                setLocalSearch(e.target.value);
-                setSelectedIds([]);
-              }}
-              className="table-search-input pl-10 pr-4 transition-all duration-300 focus:pl-11"
-            />
-          </div>
-          <Select
-            value={statusFilter}
-            onValueChange={(val) => {
-              setStatusFilter(val);
-              setSelectedIds([]);
-            }}
-          >
-            <SelectTrigger className="w-[180px] h-[42px] border-border bg-transparent text-sm">
-              <SelectValue placeholder="Stato" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Tutti">Tutti</SelectItem>
-              <SelectItem value="Da Contattare">Da Contattare</SelectItem>
-              <SelectItem value="Inviata Mail">Inviata Mail</SelectItem>
-              <SelectItem value="In Trattativa">In Trattativa</SelectItem>
-              <SelectItem value="Vinto (Cliente)">Vinto (Cliente)</SelectItem>
-              <SelectItem value="Perso">Perso</SelectItem>
-            </SelectContent>
-          </Select>
           {selectedIds.length > 0 && (
             <div className="flex items-center gap-2">
               <Select onValueChange={handleBatchAddToGroup}>
