@@ -30,7 +30,7 @@ const STATUSES = [
   },
   {
     id: "Vinto (Cliente)",
-    label: "Vinto ✓",
+    label: "Vinto",
     color: "border-t-emerald-400",
     dot: "bg-emerald-400",
     headerBg: "bg-emerald-400/5",

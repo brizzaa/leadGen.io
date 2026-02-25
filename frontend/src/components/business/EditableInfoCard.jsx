@@ -85,18 +85,42 @@ export default function EditableInfoCard({
           </Button>
         </div>
       ) : value ? (
-        href ? (
-          <a
-            href={href}
-            target={href.startsWith("http") ? "_blank" : "_self"}
-            rel="noopener noreferrer"
-            className="text-sm font-medium break-words hover:underline"
-          >
-            {value}
-          </a>
-        ) : (
-          <div className="text-sm font-medium break-words">{value}</div>
-        )
+        <div className="flex flex-col gap-1.5 mt-0.5">
+          {value.split(",").map((item, idx) => {
+            const trimmedItem = item.trim();
+            if (!trimmedItem) return null;
+            let linkHref = href;
+            // Generazione link automatica se non ho un href globale o se serve parsi in base al tipo
+            if (type === "email" && trimmedItem.includes("@")) {
+              linkHref = `mailto:${trimmedItem}`;
+            } else if (type === "tel" || type === "telefono") {
+              linkHref = `tel:${trimmedItem.replace(/\s+/g, "")}`;
+            } else if (
+              !href &&
+              (trimmedItem.startsWith("http") || trimmedItem.includes("."))
+            ) {
+              linkHref = trimmedItem.startsWith("http")
+                ? trimmedItem
+                : `https://${trimmedItem}`;
+            }
+
+            return linkHref ? (
+              <a
+                key={idx}
+                href={linkHref}
+                target={linkHref.startsWith("http") ? "_blank" : "_self"}
+                rel="noopener noreferrer"
+                className="text-sm font-medium break-words hover:underline w-fit"
+              >
+                {trimmedItem}
+              </a>
+            ) : (
+              <div key={idx} className="text-sm font-medium break-words">
+                {trimmedItem}
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="text-sm font-medium text-muted-foreground">—</div>
       )}

@@ -32,6 +32,7 @@ import AIGeneratorSection from "@/components/business/AIGeneratorSection";
 import SocialSection from "@/components/business/SocialSection";
 import BusinessGroupsSection from "@/components/business/BusinessGroupsSection";
 import ActivityTimeline from "@/components/business/ActivityTimeline";
+import BusinessDocumentsSection from "@/components/business/BusinessDocumentsSection";
 import "../App.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -77,13 +78,8 @@ export default function BusinessDetail() {
     "Proposta di Collaborazione",
   );
   const [emailSentSuccess, setEmailSentSuccess] = useState(false);
-  const [editEmailValue, setEditEmailValue] = useState("");
   const [isSavingEmail, setIsSavingEmail] = useState(false);
-
-  const [editPhoneValue, setEditPhoneValue] = useState("");
   const [isSavingPhone, setIsSavingPhone] = useState(false);
-
-  const [editWebsiteValue, setEditWebsiteValue] = useState("");
   const [isSavingWebsite, setIsSavingWebsite] = useState(false);
 
   const [allGroups, setAllGroups] = useState([]);
@@ -101,9 +97,6 @@ export default function BusinessDetail() {
         setBusiness(data);
         setEditNotes(data.notes || "");
         setEditNextContact(data.next_contact || "");
-        setEditEmailValue(data.email || "");
-        setEditPhoneValue(data.phone || "");
-        setEditWebsiteValue(data.website || "");
         setStatus(data.status || "Da Contattare");
 
         // Auto-select prompt type based on data
@@ -176,8 +169,7 @@ export default function BusinessDetail() {
     setIsSavingDetails(false);
   };
 
-  const handleSaveEmail = async () => {
-    const emailToSave = editEmailValue.trim();
+  const handleSaveEmail = async (emailToSave) => {
     if (!emailToSave) return;
     setIsSavingEmail(true);
     try {
@@ -204,8 +196,7 @@ export default function BusinessDetail() {
     setIsSavingEmail(false);
   };
 
-  const handleSavePhone = async () => {
-    const phoneToSave = editPhoneValue.trim();
+  const handleSavePhone = async (phoneToSave) => {
     setIsSavingPhone(true);
     try {
       const res = await fetch(`${API_URL}/api/businesses/${id}/phone`, {
@@ -231,8 +222,7 @@ export default function BusinessDetail() {
     setIsSavingPhone(false);
   };
 
-  const handleSaveWebsite = async () => {
-    const websiteToSave = editWebsiteValue.trim();
+  const handleSaveWebsite = async (websiteToSave) => {
     setIsSavingWebsite(true);
     try {
       const res = await fetch(`${API_URL}/api/businesses/${id}/website`, {
@@ -422,11 +412,10 @@ export default function BusinessDetail() {
             value={business.phone}
             isSaving={isSavingPhone}
             onSave={async (newPhone) => {
-              setEditPhoneValue(newPhone);
-              await handleSavePhone();
+              await handleSavePhone(newPhone);
               return true;
             }}
-            placeholder="Inserisci telefono"
+            placeholder="Inserisci telefono (separati da virgola per multipli)"
             type="tel"
             href={business.phone ? `tel:${business.phone}` : null}
           />
@@ -437,11 +426,10 @@ export default function BusinessDetail() {
             value={business.email}
             isSaving={isSavingEmail}
             onSave={async (newEmail) => {
-              setEditEmailValue(newEmail);
-              await handleSaveEmail();
+              await handleSaveEmail(newEmail);
               return true;
             }}
-            placeholder="Inserisci email"
+            placeholder="Inserisci email (separate da virgola per multiple)"
             type="email"
             href={business.email ? `mailto:${business.email}` : null}
           />
@@ -454,12 +442,11 @@ export default function BusinessDetail() {
             }
             isSaving={isSavingWebsite}
             onSave={async (newWebsite) => {
-              setEditWebsiteValue(newWebsite);
-              await handleSaveWebsite();
+              await handleSaveWebsite(newWebsite);
               return true;
             }}
-            placeholder="Inserisci sito web"
-            type="url"
+            placeholder="Inserisci sito web (separati da virgola per multipli)"
+            type="text"
             href={business.website ? formatUrl(business.website) : null}
           />
 
@@ -488,6 +475,7 @@ export default function BusinessDetail() {
         />
 
         <ActivityTimeline businessId={id} />
+        <BusinessDocumentsSection businessId={id} />
 
         <AIGeneratorSection
           business={business}
