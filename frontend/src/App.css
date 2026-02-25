@@ -936,12 +936,10 @@
   padding: 9px 9px 9px 5px;
   display: flex;
   align-items: flex-start;
-  gap: 4px;
   cursor: grab;
   transition:
     border-color var(--transition),
     box-shadow var(--transition),
-    transform var(--transition),
     opacity var(--transition);
   user-select: none;
 }
