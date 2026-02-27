@@ -21,6 +21,7 @@ export function getDb() {
         rating REAL,
         review_count INTEGER,
         email TEXT,
+        vat_number TEXT,
         category TEXT,
         area TEXT,
         maps_url TEXT,
@@ -74,6 +75,13 @@ export function getDb() {
         FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
       );
     `);
+
+    // Migration sicura: aggiunge vat_number ai DB già esistenti senza la colonna
+    const cols = db.pragma("table_info(businesses)").map((c) => c.name);
+    if (!cols.includes("vat_number")) {
+      db.exec("ALTER TABLE businesses ADD COLUMN vat_number TEXT");
+      console.log("[db] Migration: colonna vat_number aggiunta.");
+    }
   }
   return db;
 }

@@ -11,6 +11,7 @@ import {
   Facebook,
   ExternalLink,
   Loader2,
+  Hash,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,6 +82,7 @@ export default function BusinessDetail() {
   const [isSavingEmail, setIsSavingEmail] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
   const [isSavingWebsite, setIsSavingWebsite] = useState(false);
+  const [isSavingVat, setIsSavingVat] = useState(false);
 
   const [allGroups, setAllGroups] = useState([]);
   const [businessGroups, setBusinessGroups] = useState([]);
@@ -220,6 +222,32 @@ export default function BusinessDetail() {
       });
     }
     setIsSavingPhone(false);
+  };
+
+  const handleSaveVat = async (vatToSave) => {
+    setIsSavingVat(true);
+    try {
+      const res = await fetch(`${API_URL}/api/businesses/${id}/vat`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vat_number: vatToSave }),
+      });
+      if (res.ok) {
+        fetchBusiness();
+      } else {
+        setAlertConfig({
+          title: "Errore",
+          description: "Errore durante il salvataggio della P.IVA.",
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      setAlertConfig({
+        title: "Errore",
+        description: "Errore di connessione al server",
+      });
+    }
+    setIsSavingVat(false);
   };
 
   const handleSaveWebsite = async (websiteToSave) => {
@@ -454,6 +482,19 @@ export default function BusinessDetail() {
             icon={<Star className="fill-yellow-400 text-yellow-400" />}
             label="Rating & Recensioni"
             value={`${business.rating ? business.rating.toFixed(1) + " / 5" : "N/A"} • ${business.review_count !== null ? business.review_count : "0"} rec.`}
+          />
+
+          <EditableInfoCard
+            icon={<Hash />}
+            label="Partita IVA"
+            value={business.vat_number}
+            isSaving={isSavingVat}
+            onSave={async (newVat) => {
+              await handleSaveVat(newVat);
+              return true;
+            }}
+            placeholder="Es. 01234567890 (11 cifre)"
+            type="text"
           />
 
           <SocialSection business={business} />

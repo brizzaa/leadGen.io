@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { useMemo, useEffect } from "react";
+import { useMap, MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -13,6 +13,23 @@ import {
 } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useNavigate } from "react-router-dom";
+
+/**
+ * Componente interno che chiama invalidateSize() alla montatura.
+ * Deve stare dentro <MapContainer> per accedere all'istanza Leaflet via useMap().
+ * Risolve il problema dei tile non caricati quando la mappa viene mostrata
+ * dopo essere stata nascosta (es. switching da tabella/kanban a mappa).
+ */
+function MapResizer() {
+  const map = useMap();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [map]);
+  return null;
+}
 
 export default function BusinessMap({ businesses }) {
   const navigate = useNavigate();
@@ -112,6 +129,7 @@ export default function BusinessMap({ businesses }) {
         zoom={businessesWithCoords.length === 0 ? 5 : 12}
         style={{ height: "100%", width: "100%", zIndex: 0 }}
       >
+        <MapResizer />
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"

@@ -1,6 +1,7 @@
 import express from "express";
 import { scrapeBusinesses } from "../scraper.js";
 import { extractEmail } from "../emailExtractor.js";
+import { extractVat } from "../vatExtractor.js";
 import { getDb } from "../db.js";
 
 const router = express.Router();
@@ -61,9 +62,9 @@ router.post("/", async (req, res) => {
 
     const insertStmt = db.prepare(`
       INSERT OR IGNORE INTO businesses
-        (name, address, phone, website, rating, review_count, email, category, area, maps_url, is_claimed, facebook_url, instagram_url, social_last_active)
+        (name, address, phone, website, rating, review_count, email, vat_number, category, area, maps_url, is_claimed, facebook_url, instagram_url, social_last_active)
       VALUES
-        (@name, @address, @phone, @website, @rating, @review_count, @email, @category, @area, @maps_url, @is_claimed, @facebook_url, @instagram_url, @social_last_active)
+        (@name, @address, @phone, @website, @rating, @review_count, @email, @vat_number, @category, @area, @maps_url, @is_claimed, @facebook_url, @instagram_url, @social_last_active)
     `);
 
     let savedCount = 0;
@@ -78,6 +79,7 @@ router.post("/", async (req, res) => {
         rating: biz.rating ?? null,
         review_count: biz.review_count ?? null,
         email: null,
+        vat_number: null, // verrà estratta in background
         category: biz.category ?? category,
         area: biz.area ?? area,
         maps_url: biz.maps_url ?? null,
@@ -114,8 +116,9 @@ router.post("/", async (req, res) => {
     });
     res.end();
 
+    // Estrazione email e P.IVA in background (non blocca la risposta)
     if (businesses.length > 0) {
-      extractEmailsInBackground(businesses, db);
+      extractDataInBackground(businesses, db);
     }
   } catch (err) {
     console.error("[search] Fatal error:", err);
@@ -124,23 +127,45 @@ router.post("/", async (req, res) => {
   }
 });
 
-async function extractEmailsInBackground(businesses, db) {
-  const updateStmt = db.prepare(
+/**
+ * Estrae email E partita IVA in background per tutti i business con sito web.
+ * Le esecuzioni sono sequenziali per non sovraccaricare i server target.
+ */
+async function extractDataInBackground(businesses, db) {
+  const updateEmailStmt = db.prepare(
     "UPDATE businesses SET email = ? WHERE name = ? AND area = ? AND email IS NULL",
   );
+  const updateVatStmt = db.prepare(
+    "UPDATE businesses SET vat_number = ? WHERE name = ? AND area = ? AND vat_number IS NULL",
+  );
+
   for (const biz of businesses) {
     if (!biz.website) continue;
+
+    // Email
     try {
       const email = await extractEmail(biz.website);
       if (email) {
-        updateStmt.run(email, biz.name, biz.area);
+        updateEmailStmt.run(email, biz.name, biz.area);
         console.log(`[email] ${biz.name} → ${email}`);
       }
     } catch {
       /* skip */
     }
+
+    // Partita IVA — solo siti reali (non Facebook/social)
+    try {
+      const vat = await extractVat(biz.website);
+      if (vat) {
+        updateVatStmt.run(vat, biz.name, biz.area);
+        console.log(`[vat] ${biz.name} → P.IVA ${vat}`);
+      }
+    } catch {
+      /* skip */
+    }
   }
-  console.log("[email] Background email extraction complete.");
+
+  console.log("[background] Email + P.IVA extraction complete.");
 }
 
 export default router;

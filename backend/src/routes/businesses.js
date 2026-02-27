@@ -179,6 +179,7 @@ router.get("/export", (req, res) => {
       "address",
       "phone",
       "email",
+      "vat_number",
       "website",
       "rating",
       "review_count",
@@ -297,6 +298,20 @@ router.patch("/:id/website", (req, res) => {
     return res.status(404).json({ error: "Business not found" });
   }
   res.json({ success: true, website });
+});
+
+// PATCH /api/businesses/:id/vat
+router.patch("/:id/vat", (req, res) => {
+  const { vat_number } = req.body;
+  const db = getDb();
+  const result = db
+    .prepare("UPDATE businesses SET vat_number = ? WHERE id = ?")
+    .run(vat_number ?? null, req.params.id);
+
+  if (result.changes === 0) {
+    return res.status(404).json({ error: "Business not found" });
+  }
+  res.json({ success: true, vat_number });
 });
 
 // PATCH /api/businesses/:id/details
