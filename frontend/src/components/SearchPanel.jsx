@@ -104,6 +104,7 @@ export default function SearchPanel({
                 id="area-input"
                 type="text"
                 placeholder="es. Rovigo, Padova, Milano..."
+                
                 value={area}
                 onChange={(e) => setArea(e.target.value)}
                 required

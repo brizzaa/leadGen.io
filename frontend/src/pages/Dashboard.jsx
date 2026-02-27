@@ -6,6 +6,7 @@ import {
   MapPin,
   LayoutGrid,
   List,
+  Map as MapIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,6 +15,7 @@ import ProgressLog from "../components/ProgressLog";
 import TableFilters from "../components/TableFilters";
 import BusinessTable from "../components/BusinessTable";
 import KanbanBoard from "../components/KanbanBoard";
+import BusinessMap from "../components/BusinessMap";
 import RemindersWidget from "../components/RemindersWidget";
 import { ModeToggle } from "../components/ModeToggle";
 import "../App.css";
@@ -281,6 +283,14 @@ export default function Dashboard() {
                   <LayoutGrid className="w-4 h-4" />
                   <span>Kanban</span>
                 </button>
+                <button
+                  onClick={() => setView("map")}
+                  className={`view-toggle__btn ${viewMode === "map" ? "view-toggle__btn--active" : ""}`}
+                  title="Vista Mappa"
+                >
+                  <MapIcon className="w-4 h-4" />
+                  <span>Mappa</span>
+                </button>
               </div>
             </div>
 
@@ -308,7 +318,7 @@ export default function Dashboard() {
                     groups={groups}
                   />
                 </motion.div>
-              ) : (
+              ) : viewMode === "kanban" ? (
                 <motion.div
                   key="kanban"
                   initial={{ opacity: 0, y: 8 }}
@@ -317,6 +327,20 @@ export default function Dashboard() {
                   transition={{ duration: 0.2 }}
                 >
                   <KanbanBoard
+                    businesses={businesses}
+                    onStatusUpdate={handleStatusUpdate}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="map"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                  className="mt-4"
+                >
+                  <BusinessMap
                     businesses={businesses}
                     onStatusUpdate={handleStatusUpdate}
                   />
