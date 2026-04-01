@@ -592,6 +592,139 @@ Firma il messaggio come: "${process.env.MY_NAME || "Luca Brizzante"}"`;
   }
 });
 
+// POST /api/businesses/:id/generate-website
+router.post("/:id/generate-website", async (req, res) => {
+  const db = getDb();
+  const biz = db
+    .prepare("SELECT * FROM businesses WHERE id = ?")
+    .get(req.params.id);
+
+  if (!biz) return res.status(404).json({ error: "Business not found" });
+
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (!geminiApiKey) {
+    return res.status(400).json({ error: "GEMINI_API_KEY non configurata nel file .env" });
+  }
+
+  const socialsInfo = [biz.facebook_url, biz.instagram_url]
+    .filter(Boolean)
+    .join(", ") || "nessuno";
+
+  const prompt = `Sei un web designer italiano esperto e creativo. Genera un sito vetrina completo, moderno e professionale per questa attività, in un SINGOLO file HTML autocontenuto.
+
+DATI ATTIVITÀ:
+- Nome: ${biz.name}
+- Settore: ${biz.category || "N/A"}
+- Area: ${biz.area || "N/A"}
+- Indirizzo: ${biz.address || "N/A"}
+- Telefono: ${biz.phone || "N/A"}
+- Email: ${biz.email || "N/A"}
+- Social: ${socialsInfo}
+- Rating: ${biz.rating ? biz.rating + "/5" : "N/A"} (${biz.review_count || 0} recensioni)
+- Sito attuale: ${biz.website || "nessuno"}
+
+REGOLE STRUTTURALI OBBLIGATORIE:
+1. HTML singolo autocontenuto con <!DOCTYPE html>, <html lang="it">
+2. Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
+3. Google Fonts Inter via CDN: <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+4. Font-family: 'Inter', sans-serif su tutto il body
+5. Responsive mobile-first
+6. Lingua italiana per tutti i testi
+
+REGOLE TEMA:
+1. Scegli DARK MODE (sfondo #0a0a0a, testo #f0f0f0) o LIGHT MODE (sfondo #fafafa, testo #111) in base alla categoria:
+   - Dark: ristoranti, bar, pub, pizzerie, idraulici, elettricisti, meccanici, palestre, tatuatori, barber shop
+   - Light: pasticcerie, fioristi, estetiste, parrucchiere, studi medici, dentisti, commercialisti, avvocati, fotografi, wedding planner
+   - Per categorie ambigue, scegli tu quello più adatto
+2. Scegli un colore accent coerente con il settore (es. arancione per food, viola per beauty, blu per professional)
+3. Usa il colore accent con parsimonia: CTA, hover, bordi, dettagli
+
+REGOLE ANIMAZIONI:
+1. Definisci questa animazione nel <style>:
+   @keyframes fadeUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+2. Aggiungi la classe .fade-up { opacity: 0; } agli elementi da animare
+3. Aggiungi questo script PRIMA di </body> per Intersection Observer:
+   <script>
+   const observer = new IntersectionObserver((entries) => {
+     entries.forEach((entry, index) => {
+       if (entry.isIntersecting) {
+         entry.target.style.animation = 'fadeUp 0.8s ' + (index * 0.1) + 's ease forwards';
+         observer.unobserve(entry.target);
+       }
+     });
+   }, { threshold: 0.1 });
+   document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+   </script>
+4. Transizioni smooth su hover (transform, box-shadow, opacity) con transition: all 0.3s ease
+5. ZERO librerie JS esterne
+
+REGOLE SEZIONI — Scegli 5-8 tra queste, le più sensate per il tipo di attività:
+- Hero (OBBLIGATORIO): immagine di sfondo a tutto schermo, overlay gradient, headline grande, subheadline, pulsante CTA
+- Servizi: 3-4 card con icone SVG inline e descrizioni specifiche per l'attività
+- Chi Siamo: testo narrativo realistico, layout a 2 colonne con immagine
+- Numeri/Statistiche: 3-4 numeri chiave (anni attività, clienti serviti, progetti completati, etc.)
+- Galleria: griglia di 3-6 immagini con hover zoom
+- Testimonianze: 2-3 card con stelle SVG, nomi e testi realistici
+- FAQ: 3-5 domande frequenti, usa <details><summary> per l'accordion
+- Contatti (OBBLIGATORIO): indirizzo, telefono cliccabile, email cliccabile, link social se presenti
+- Footer (OBBLIGATORIO): copyright con anno corrente, nome business, link rapidi alle sezioni
+
+REGOLE IMMAGINI:
+1. Per le immagini usa ESCLUSIVAMENTE https://picsum.photos/seed/{keyword}/{width}/{height} dove {keyword} è una parola inglese legata al settore (es. "restaurant", "hair", "plumber", "flower", "gym")
+2. Usa keyword DIVERSE per ogni immagine (es. "restaurant1", "food2", "dining3")
+3. Hero: immagine 1920x1080 con overlay gradient scuro/chiaro sopra
+4. Galleria: immagini 600x400
+5. Chi Siamo: immagine 800x600
+6. Tutte le immagini devono avere alt text descrittivo
+
+DIVIETI ASSOLUTI:
+- ZERO emoji in qualsiasi parte del sito
+- ZERO placeholder "Lorem ipsum"
+- ZERO immagini da domini diversi da picsum.photos
+- ZERO commenti HTML nel codice
+- ZERO librerie JS esterne (solo Tailwind CDN e lo script Intersection Observer sopra)
+- NON usare immagini SVG come sfondo per la hero — usa SOLO picsum.photos
+
+RISPONDI SOLO CON IL CODICE HTML COMPLETO. Nessun testo prima o dopo, nessun markdown, nessun backtick.`;
+
+  try {
+    const axios = (await import("axios")).default;
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${geminiApiKey}`,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 16384,
+        },
+      },
+      {
+        headers: { "Content-Type": "application/json" },
+        timeout: 120000,
+      },
+    );
+
+    let html = response.data.candidates[0].content.parts[0].text;
+
+    // Strip markdown code fences se Gemini le aggiunge
+    html = html.replace(/^```html?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+
+    // Validazione minimale
+    if (!html.includes("<!DOCTYPE") && !html.includes("<html")) {
+      throw new Error("La risposta non contiene HTML valido");
+    }
+
+    res.json({ success: true, html });
+  } catch (error) {
+    console.error("[generate-website] Error:", error.message);
+    res.status(500).json({
+      error:
+        "Errore generazione sito: " +
+        (error.response?.data?.error?.message || error.message),
+    });
+  }
+});
+
 // POST /api/businesses/:id/send-email
 router.post("/:id/send-email", async (req, res) => {
   const { generatedEmail, toEmail, subject } = req.body;
