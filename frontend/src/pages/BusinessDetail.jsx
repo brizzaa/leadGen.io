@@ -12,6 +12,7 @@ import {
   ExternalLink,
   Loader2,
   Hash,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +35,7 @@ import SocialSection from "@/components/business/SocialSection";
 import BusinessGroupsSection from "@/components/business/BusinessGroupsSection";
 import ActivityTimeline from "@/components/business/ActivityTimeline";
 import BusinessDocumentsSection from "@/components/business/BusinessDocumentsSection";
+import WebsitePreviewDialog from "@/components/business/WebsitePreviewDialog";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const isFacebook = (url) => url && url.toLowerCase().includes("facebook.com");
@@ -82,6 +84,8 @@ export default function BusinessDetail() {
   const [isSavingPhone, setIsSavingPhone] = useState(false);
   const [isSavingWebsite, setIsSavingWebsite] = useState(false);
   const [isSavingVat, setIsSavingVat] = useState(false);
+  const [isGeneratingWebsite, setIsGeneratingWebsite] = useState(false);
+  const [generatedWebsiteHtml, setGeneratedWebsiteHtml] = useState(null);
 
   const [allGroups, setAllGroups] = useState([]);
   const [businessGroups, setBusinessGroups] = useState([]);
@@ -383,6 +387,35 @@ export default function BusinessDetail() {
     }
   };
 
+  const handleGenerateWebsite = async () => {
+    setIsGeneratingWebsite(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/businesses/${id}/generate-website`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setGeneratedWebsiteHtml(data.html);
+      } else {
+        setAlertConfig({
+          title: "Errore Generazione",
+          description: data.error || "Errore sconosciuto durante la generazione del sito",
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      setAlertConfig({
+        title: "Errore",
+        description: "Errore di connessione al server",
+      });
+    }
+    setIsGeneratingWebsite(false);
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -505,6 +538,33 @@ export default function BusinessDetail() {
           />
         </div>
 
+        {/* Website Generator */}
+        <div className="flex flex-col gap-3 p-6 rounded-xl border border-border/50 bg-card shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Globe className="w-4 h-4 text-primary" />
+                Sito Vetrina AI
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Genera un sito vetrina completo e personalizzato con l'AI
+              </p>
+            </div>
+            <Button
+              onClick={handleGenerateWebsite}
+              disabled={isGeneratingWebsite}
+              className="bg-[#00d4aa] text-black hover:bg-[#00d4aa]/90 font-semibold"
+            >
+              {isGeneratingWebsite ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Zap className="w-4 h-4 mr-2" />
+              )}
+              {isGeneratingWebsite ? "Generazione..." : "Genera Sito"}
+            </Button>
+          </div>
+        </div>
+
         <CRMSection
           notes={editNotes}
           onNotesChange={setEditNotes}
@@ -551,6 +611,15 @@ export default function BusinessDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <WebsitePreviewDialog
+        open={generatedWebsiteHtml !== null}
+        onClose={() => setGeneratedWebsiteHtml(null)}
+        html={generatedWebsiteHtml || ""}
+        businessName={business.name}
+        onRegenerate={handleGenerateWebsite}
+        isRegenerating={isGeneratingWebsite}
+      />
     </div>
   );
 }
