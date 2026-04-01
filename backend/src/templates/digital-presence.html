@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{BUSINESS_NAME}} — Nuova Presenza Online</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--accent:{{ACCENT_COLOR}}}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:#030712;color:#f0f0f0;overflow-x:hidden}
+  .hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:2rem;position:relative;overflow:hidden;background:#030712}
+  .grid-bg{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:60px 60px}
+  .glow{position:absolute;top:20%;left:50%;transform:translateX(-50%);width:600px;height:300px;background:radial-gradient(ellipse,color-mix(in srgb,var(--accent) 25%,transparent) 0%,transparent 70%);pointer-events:none}
+  .content{position:relative;z-index:1}
+  .tag{background:color-mix(in srgb,var(--accent) 15%,transparent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);color:var(--accent);display:inline-block;padding:.35rem 1rem;border-radius:2rem;font-size:.8rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:1.5rem;animation:pop .6s ease both}
+  h1{font-size:clamp(2rem,5.5vw,3.8rem);font-weight:900;line-height:1.1;margin-bottom:1.2rem;animation:pop .6s .1s ease both}
+  .sub{font-size:clamp(.95rem,1.8vw,1.2rem);color:#9ca3af;max-width:560px;line-height:1.8;animation:pop .6s .2s ease both}
+  .cta{margin-top:2.5rem;display:inline-flex;align-items:center;gap:.5rem;background:var(--accent);color:#000;padding:.85rem 2.2rem;border-radius:3rem;font-weight:700;font-size:1rem;text-decoration:none;animation:pop .6s .3s ease both;transition:all .2s}
+  .cta:hover{transform:scale(1.05)}
+  .missing{padding:5rem 2rem;max-width:1100px;margin:0 auto}
+  .missing h2{text-align:center;font-size:1.8rem;margin-bottom:3rem}
+  .miss-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.2rem}
+  .miss-item{background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1.5rem;display:flex;gap:1rem;transition:border-color .3s}
+  .miss-item:hover{border-color:var(--accent)}
+  .miss-num{min-width:2.2rem;height:2.2rem;background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent);border-radius:.5rem;display:flex;align-items:center;justify-content:center;font-weight:800}
+  .miss-item h3{font-size:1rem;margin-bottom:.3rem}
+  .miss-item p{color:#6b7280;font-size:.88rem;line-height:1.5}
+  .cta-bottom{background:#0f172a;padding:5rem 2rem;text-align:center}
+  .cta-bottom h2{font-size:2rem;margin-bottom:2rem}
+  .cta-row{display:flex;flex-wrap:wrap;gap:1rem;justify-content:center}
+  .btn-main{background:var(--accent);color:#000;padding:.9rem 2.5rem;border-radius:3rem;font-weight:700;text-decoration:none}
+  .btn-sec{border:1px solid var(--accent);color:var(--accent);padding:.9rem 2.5rem;border-radius:3rem;font-weight:700;text-decoration:none}
+  footer{text-align:center;padding:2rem;color:#374151;font-size:.8rem}
+  @keyframes pop{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<section class="hero">
+  <div class="grid-bg"></div>
+  <div class="glow"></div>
+  <div class="content">
+    <span class="tag">Nuova Presenza Digitale</span>
+    <h1>{{HEADLINE}}</h1>
+    <p class="sub">{{SUBHEADLINE}}</p>
+    <a href="#azione" class="cta">{{CTA_TEXT}} →</a>
+  </div>
+</section>
+<section class="missing">
+  <h2>Cosa stai perdendo ogni giorno</h2>
+  <div class="miss-grid">
+    <div class="miss-item"><div class="miss-num">01</div><div><h3>{{SERVICE_1}}</h3><p>I clienti cercano online prima di chiamare. Se non ci sei, trovano qualcun altro.</p></div></div>
+    <div class="miss-item"><div class="miss-num">02</div><div><h3>{{SERVICE_2}}</h3><p>Una presenza curata trasmette affidabilità ancora prima del primo contatto.</p></div></div>
+    <div class="miss-item"><div class="miss-num">03</div><div><h3>{{SERVICE_3}}</h3><p>Un sito veloce converte i visitatori in clienti, automaticamente.</p></div></div>
+  </div>
+</section>
+<section class="cta-bottom" id="azione">
+  <h2>Pronto a crescere online?</h2>
+  <div class="cta-row">
+    <a href="tel:{{BUSINESS_PHONE}}" class="btn-main">Chiamaci</a>
+    <a href="mailto:{{BUSINESS_EMAIL}}" class="btn-sec">Scrivici</a>
+  </div>
+</section>
+<footer>© 2025 {{BUSINESS_NAME}}</footer>
+</body>
+</html>

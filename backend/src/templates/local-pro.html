@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{BUSINESS_NAME}}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--accent:{{ACCENT_COLOR}}}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#f0f0f0;overflow-x:hidden}
+  .hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:2rem;background:linear-gradient(135deg,#0a0a0a 0%,#111 60%,color-mix(in srgb,var(--accent) 15%,#0a0a0a) 100%);position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 70% 30%,color-mix(in srgb,var(--accent) 20%,transparent) 0%,transparent 60%)}
+  .badge{display:inline-block;background:color-mix(in srgb,var(--accent) 20%,transparent);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);color:var(--accent);padding:.4rem 1.2rem;border-radius:2rem;font-size:.85rem;font-weight:600;letter-spacing:.05em;margin-bottom:1.5rem;animation:fadeUp .8s ease both}
+  h1{font-size:clamp(2.2rem,6vw,4rem);font-weight:800;line-height:1.1;margin-bottom:1.2rem;animation:fadeUp .8s .1s ease both}
+  .sub{font-size:clamp(1rem,2vw,1.3rem);color:#aaa;max-width:600px;line-height:1.7;animation:fadeUp .8s .2s ease both}
+  .cta{display:inline-block;margin-top:2.5rem;background:var(--accent);color:#000;padding:.9rem 2.5rem;border-radius:3rem;font-weight:700;font-size:1.1rem;text-decoration:none;transition:transform .2s,box-shadow .2s;animation:fadeUp .8s .3s ease both;box-shadow:0 0 30px color-mix(in srgb,var(--accent) 40%,transparent)}
+  .cta:hover{transform:translateY(-2px)}
+  .services{padding:5rem 2rem;max-width:1100px;margin:0 auto}
+  .services h2{text-align:center;font-size:2rem;margin-bottom:3rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem}
+  .card{background:#111;border:1px solid #222;border-radius:1.2rem;padding:2rem;transition:border-color .3s,transform .3s}
+  .card:hover{border-color:var(--accent);transform:translateY(-4px)}
+  .card-icon{width:3rem;height:3rem;background:color-mix(in srgb,var(--accent) 15%,transparent);border-radius:.8rem;display:flex;align-items:center;justify-content:center;margin-bottom:1.2rem;font-size:1.5rem}
+  .card h3{font-size:1.15rem;margin-bottom:.5rem}
+  .card p{color:#888;line-height:1.6;font-size:.95rem}
+  .contact{background:#111;padding:5rem 2rem;text-align:center}
+  .contact h2{font-size:2rem;margin-bottom:2rem}
+  .contact-info{display:flex;flex-wrap:wrap;justify-content:center;gap:1.5rem;max-width:700px;margin:0 auto}
+  .contact-item{display:flex;align-items:center;gap:.75rem;background:#1a1a1a;border:1px solid #2a2a2a;padding:1rem 1.5rem;border-radius:.8rem;font-size:.95rem}
+  .contact-item a{color:var(--accent);text-decoration:none}
+  footer{text-align:center;padding:2rem;color:#444;font-size:.8rem}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<section class="hero">
+  <div class="badge">Professionisti Locali</div>
+  <h1>{{HEADLINE}}</h1>
+  <p class="sub">{{SUBHEADLINE}}</p>
+  <a href="#contatti" class="cta">{{CTA_TEXT}}</a>
+</section>
+<section class="services">
+  <h2>I nostri servizi</h2>
+  <div class="grid">
+    <div class="card"><div class="card-icon">⚡</div><h3>{{SERVICE_1}}</h3><p>Intervento rapido e professionale, disponibili 7 giorni su 7.</p></div>
+    <div class="card"><div class="card-icon">🛡️</div><h3>{{SERVICE_2}}</h3><p>Materiali certificati e garanzia sul lavoro svolto.</p></div>
+    <div class="card"><div class="card-icon">💬</div><h3>{{SERVICE_3}}</h3><p>Preventivo gratuito e trasparente, senza sorprese.</p></div>
+  </div>
+</section>
+<section class="contact" id="contatti">
+  <h2>Contattaci oggi</h2>
+  <div class="contact-info">
+    <div class="contact-item">📍 {{BUSINESS_ADDRESS}}</div>
+    <div class="contact-item">📞 <a href="tel:{{BUSINESS_PHONE}}">{{BUSINESS_PHONE}}</a></div>
+    <div class="contact-item">✉️ <a href="mailto:{{BUSINESS_EMAIL}}">{{BUSINESS_EMAIL}}</a></div>
+  </div>
+</section>
+<footer>© 2025 {{BUSINESS_NAME}}</footer>
+</body>
+</html>
