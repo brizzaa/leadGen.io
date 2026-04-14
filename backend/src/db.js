@@ -94,6 +94,27 @@ export function getDb() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(campaign_id, business_id)
       );
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        name TEXT NOT NULL,
+        company TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS follow_ups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        step INTEGER NOT NULL DEFAULT 1,
+        scheduled_at DATETIME NOT NULL,
+        sent_at DATETIME,
+        status TEXT DEFAULT 'pending',
+        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
       CREATE TABLE IF NOT EXISTS email_tracking (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         business_id INTEGER NOT NULL,
@@ -110,6 +131,24 @@ export function getDb() {
     if (!cols.includes("vat_number")) {
       db.exec("ALTER TABLE businesses ADD COLUMN vat_number TEXT");
       console.log("[db] Migration: colonna vat_number aggiunta.");
+    }
+    if (!cols.includes("user_id")) {
+      db.exec("ALTER TABLE businesses ADD COLUMN user_id INTEGER REFERENCES users(id)");
+      console.log("[db] Migration: colonna user_id aggiunta a businesses.");
+    }
+
+    // Migration: user_id su campaigns
+    const campCols = db.pragma("table_info(campaigns)").map((c) => c.name);
+    if (!campCols.includes("user_id")) {
+      db.exec("ALTER TABLE campaigns ADD COLUMN user_id INTEGER REFERENCES users(id)");
+      console.log("[db] Migration: colonna user_id aggiunta a campaigns.");
+    }
+
+    // Migration: user_id su groups
+    const grpCols = db.pragma("table_info(groups)").map((c) => c.name);
+    if (!grpCols.includes("user_id")) {
+      db.exec("ALTER TABLE groups ADD COLUMN user_id INTEGER REFERENCES users(id)");
+      console.log("[db] Migration: colonna user_id aggiunta a groups.");
     }
   }
   return db;
