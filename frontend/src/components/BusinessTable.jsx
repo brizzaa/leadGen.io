@@ -27,6 +27,7 @@ import {
   XCircle,
   Filter,
   Rocket,
+  Folder,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -173,6 +174,7 @@ export default function BusinessTable({
     social: false,
     website: false,
   });
+  const [hideContacted, setHideContacted] = useState(false);
 
   const toggleColumnFilter = (key) => {
     setColumnFilters((prev) => ({
@@ -192,7 +194,7 @@ export default function BusinessTable({
   useEffect(() => {
     setCurrentPage(1);
     setDirection(0);
-  }, [sortKey, sortDir, columnFilters]);
+  }, [sortKey, sortDir, columnFilters, hideContacted]);
 
   const handlePageChange = (newPage) => {
     setDirection(newPage > currentPage ? 1 : -1);
@@ -221,6 +223,8 @@ export default function BusinessTable({
 
   const filtered = businesses
     .filter((b) => {
+      // Nascondi già contattati
+      if (hideContacted && b.status === "Inviata Mail") return false;
       // Column filters
       if (columnFilters.phone && !b.phone) return false;
       if (columnFilters.email && !b.email) return false;
@@ -481,6 +485,16 @@ export default function BusinessTable({
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setHideContacted((v) => !v)}
+            className={`toolbar-btn ${hideContacted ? "border-[#00d4aa] text-[#00d4aa] bg-[#00d4aa]/5" : ""}`}
+          >
+            <Mail className="w-3.5 h-3.5 mr-1" />
+            {hideContacted ? "Mostra tutti" : "Nascondi contattati"}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleBatchSocialScan}
             disabled={isBatchScanning || filtered.length === 0}
             className={`toolbar-btn ${isBatchScanning ? "animate-pulse border-primary" : ""}`}
@@ -580,6 +594,13 @@ export default function BusinessTable({
                   onSort={handleSort}
                 />
 
+                <SortableHead
+                  label="Score"
+                  k="lead_score"
+                  sortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                />
                 <SortableHead
                   label="Recensioni"
                   k="review_count"
@@ -693,6 +714,31 @@ export default function BusinessTable({
                         </Select>
                       </TableCell>
 
+                      <TableCell>
+                        {b.lead_score != null ? (
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-10 h-2 rounded-full bg-muted overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  b.lead_score >= 60 ? "bg-green-500" :
+                                  b.lead_score >= 35 ? "bg-yellow-500" :
+                                  "bg-muted-foreground/40"
+                                }`}
+                                style={{ width: `${b.lead_score}%` }}
+                              />
+                            </div>
+                            <span className={`text-xs font-mono font-semibold ${
+                              b.lead_score >= 60 ? "text-green-500" :
+                              b.lead_score >= 35 ? "text-yellow-500" :
+                              "text-muted-foreground"
+                            }`}>
+                              {b.lead_score}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {b.review_count !== null ? (
                           <Badge

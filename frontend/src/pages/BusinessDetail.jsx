@@ -86,6 +86,9 @@ export default function BusinessDetail() {
   const [isSavingVat, setIsSavingVat] = useState(false);
   const [isGeneratingWebsite, setIsGeneratingWebsite] = useState(false);
   const [generatedWebsiteHtml, setGeneratedWebsiteHtml] = useState(null);
+  const [websiteStyle, setWebsiteStyle] = useState("auto");
+  const [websiteEngine, setWebsiteEngine] = useState("auto");
+  const [usedEngine, setUsedEngine] = useState(null);
 
   const [allGroups, setAllGroups] = useState([]);
   const [businessGroups, setBusinessGroups] = useState([]);
@@ -395,11 +398,13 @@ export default function BusinessDetail() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ style: websiteStyle, engine: websiteEngine }),
         },
       );
       const data = await res.json();
       if (res.ok && data.success) {
         setGeneratedWebsiteHtml(data.html);
+        setUsedEngine(data.engine);
       } else {
         setAlertConfig({
           title: "Errore Generazione",
@@ -516,6 +521,34 @@ export default function BusinessDetail() {
             value={`${business.rating ? business.rating.toFixed(1) + " / 5" : "N/A"} • ${business.review_count !== null ? business.review_count : "0"} rec.`}
           />
 
+          {business.lead_score != null && (
+            <InfoCard
+              icon={<Zap className={business.lead_score >= 60 ? "text-green-500" : business.lead_score >= 35 ? "text-yellow-500" : "text-muted-foreground"} />}
+              label="Lead Score"
+              value={
+                <div className="flex items-center gap-2">
+                  <div className="w-20 h-2.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        business.lead_score >= 60 ? "bg-green-500" :
+                        business.lead_score >= 35 ? "bg-yellow-500" :
+                        "bg-muted-foreground/40"
+                      }`}
+                      style={{ width: `${business.lead_score}%` }}
+                    />
+                  </div>
+                  <span className={`text-sm font-bold ${
+                    business.lead_score >= 60 ? "text-green-500" :
+                    business.lead_score >= 35 ? "text-yellow-500" :
+                    "text-muted-foreground"
+                  }`}>
+                    {business.lead_score}/100
+                  </span>
+                </div>
+              }
+            />
+          )}
+
           <EditableInfoCard
             icon={<Hash />}
             label="Partita IVA"
@@ -550,18 +583,49 @@ export default function BusinessDetail() {
                 Genera un sito vetrina completo e personalizzato con l'AI
               </p>
             </div>
-            <Button
-              onClick={handleGenerateWebsite}
-              disabled={isGeneratingWebsite}
-              className="bg-[#00d4aa] text-black hover:bg-[#00d4aa]/90 font-semibold"
-            >
-              {isGeneratingWebsite ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Zap className="w-4 h-4 mr-2" />
-              )}
-              {isGeneratingWebsite ? "Generazione..." : "Genera Sito"}
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={websiteEngine}
+                onChange={(e) => setWebsiteEngine(e.target.value)}
+                disabled={isGeneratingWebsite}
+                className="h-9 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="auto">Engine: Auto</option>
+                <option value="stitch">Stitch (Google)</option>
+                <option value="gemini_pro">Gemini 2.5 Pro</option>
+                <option value="gemini_flash">Gemini 2.5 Flash</option>
+              </select>
+              <select
+                value={websiteStyle}
+                onChange={(e) => setWebsiteStyle(e.target.value)}
+                disabled={isGeneratingWebsite}
+                className="h-9 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="auto">Stile: Auto</option>
+                <option value="elegant">Elegante</option>
+                <option value="bold">Audace</option>
+                <option value="warm">Caldo</option>
+                <option value="professional">Professionale</option>
+                <option value="creative">Creativo</option>
+              </select>
+              <Button
+                onClick={handleGenerateWebsite}
+                disabled={isGeneratingWebsite}
+                className="bg-[#00d4aa] text-black hover:bg-[#00d4aa]/90 font-semibold"
+              >
+                {isGeneratingWebsite ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Zap className="w-4 h-4 mr-2" />
+                )}
+                {isGeneratingWebsite ? "Generazione..." : "Genera Sito"}
+              </Button>
+            </div>
+            {usedEngine && !isGeneratingWebsite && (
+              <span className="text-[10px] text-muted-foreground mt-1">
+                Generato con: {usedEngine === "stitch" ? "Stitch" : usedEngine === "gemini_pro" ? "Gemini Pro" : "Gemini Flash"}
+              </span>
+            )}
           </div>
         </div>
 
@@ -617,6 +681,7 @@ export default function BusinessDetail() {
         onClose={() => setGeneratedWebsiteHtml(null)}
         html={generatedWebsiteHtml || ""}
         businessName={business.name}
+        businessId={business.id}
         onRegenerate={handleGenerateWebsite}
         isRegenerating={isGeneratingWebsite}
       />
