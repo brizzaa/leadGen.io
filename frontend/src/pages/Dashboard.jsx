@@ -18,11 +18,14 @@ import KanbanBoard from "../components/KanbanBoard";
 import BusinessMap from "../components/BusinessMap";
 import RemindersWidget from "../components/RemindersWidget";
 import { ModeToggle } from "../components/ModeToggle";
+import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "react-router-dom";
 import "../App.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 export default function Dashboard() {
+  const { user, logout } = useAuth();
   const [businesses, setBusinesses] = useState([]);
   const [groups, setGroups] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -224,8 +227,13 @@ export default function Dashboard() {
               value={businesses?.length || 0}
               label="Totale filtrati"
             />
-            <div className="ml-2">
+            <div className="ml-2 flex items-center gap-2">
+              <Link to="/analytics">
+                <Button variant="outline" size="sm">Analytics</Button>
+              </Link>
+              <span className="text-sm text-muted-foreground hidden sm:inline">{user?.name}</span>
               <ModeToggle />
+              <Button variant="ghost" size="sm" onClick={logout}>Esci</Button>
             </div>
           </motion.div>
         </div>
