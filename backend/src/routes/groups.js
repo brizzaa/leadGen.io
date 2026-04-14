@@ -7,7 +7,7 @@ const router = express.Router();
 router.get("/", (req, res) => {
   try {
     const db = getDb();
-    const groups = db.prepare("SELECT * FROM groups ORDER BY name ASC").all();
+    const groups = db.prepare("SELECT * FROM groups WHERE user_id = ? ORDER BY name ASC").all(req.userId);
     res.json(groups);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -22,8 +22,8 @@ router.post("/", (req, res) => {
   try {
     const db = getDb();
     const result = db
-      .prepare("INSERT INTO groups (name, description, color) VALUES (?, ?, ?)")
-      .run(name, description, color || "#3b82f6");
+      .prepare("INSERT INTO groups (name, description, color, user_id) VALUES (?, ?, ?, ?)")
+      .run(name, description, color || "#3b82f6", req.userId);
     res.json({ id: result.lastInsertRowid, name, description, color });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -34,7 +34,7 @@ router.post("/", (req, res) => {
 router.delete("/:id", (req, res) => {
   try {
     const db = getDb();
-    db.prepare("DELETE FROM groups WHERE id = ?").run(req.params.id);
+    db.prepare("DELETE FROM groups WHERE id = ? AND user_id = ?").run(req.params.id, req.userId);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

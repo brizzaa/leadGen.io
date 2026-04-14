@@ -32,8 +32,8 @@ router.post("/", async (req, res) => {
 
   // Crea la riga campaign
   const result = db.prepare(
-    "INSERT INTO campaigns (total, status) VALUES (?, 'running')"
-  ).run(businessIds.length);
+    "INSERT INTO campaigns (total, status, user_id) VALUES (?, 'running', ?)"
+  ).run(businessIds.length, req.userId);
   const campaignId = result.lastInsertRowid;
 
   // Inserisce tutti i risultati come pending

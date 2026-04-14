@@ -6,8 +6,14 @@ import { Parser } from "json2csv";
 import { scanSocial, scanSocialBatch } from "../socialScanner.js";
 import { makeSlug, deployToNetlify, generateWebsiteHtml, WEBSITE_STYLES, WEBSITE_ENGINES } from "../landingPageBuilder.js";
 import { computeLeadScore } from "../leadScore.js";
+import { scheduleFollowUps, cancelFollowUps } from "../followUpEngine.js";
 
 const router = express.Router();
+
+// Helper per verificare ownership di un business
+function getOwnedBusiness(db, businessId, userId) {
+  return db.prepare("SELECT * FROM businesses WHERE id = ? AND user_id = ?").get(businessId, userId);
+}
 
 // Helper per creare un activity log
 function logActivity(businessId, type, message, meta = null) {
@@ -37,8 +43,8 @@ router.get("/", (req, res) => {
     } = req.query;
 
     const db = getDb();
-    let whereClauses = ["1=1"];
-    const params = [];
+    let whereClauses = ["user_id = ?"];
+    const params = [req.userId];
 
     if (status && status !== "Tutti") {
       whereClauses.push("status = ?");
@@ -111,9 +117,9 @@ router.get("/scan-social-batch", async (req, res) => {
   // Fetch only the requested businesses
   const businesses = db
     .prepare(
-      `SELECT * FROM businesses WHERE id IN (${idList.map(() => "?").join(",")})`,
+      `SELECT * FROM businesses WHERE user_id = ? AND id IN (${idList.map(() => "?").join(",")})`,
     )
-    .all(...idList);
+    .all(req.userId, ...idList);
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -180,8 +186,8 @@ router.post("/bulk", (req, res) => {
   const db = getDb();
   const placeholders = ids.map(() => "?").join(",");
   const businesses = db
-    .prepare(`SELECT * FROM businesses WHERE id IN (${placeholders})`)
-    .all(...ids);
+    .prepare(`SELECT * FROM businesses WHERE user_id = ? AND id IN (${placeholders})`)
+    .all(req.userId, ...ids);
   res.json(businesses);
 });
 
@@ -190,8 +196,8 @@ router.get("/export", (req, res) => {
   try {
     const db = getDb();
     const businesses = db
-      .prepare("SELECT * FROM businesses ORDER BY created_at DESC")
-      .all();
+      .prepare("SELECT * FROM businesses WHERE user_id = ? ORDER BY created_at DESC")
+      .all(req.userId);
 
     console.log(
       `[export] Esportazione in corso: ${businesses.length} business trovati.`,
@@ -265,11 +271,12 @@ router.get("/follow-ups", (req, res) => {
         ELSE 'scheduled'
       END as follow_up_status
     FROM businesses b
-    WHERE b.next_contact IS NOT NULL
+    WHERE b.user_id = ?
+      AND b.next_contact IS NOT NULL
       AND b.next_contact != ''
       AND b.status NOT IN ('Vinto (Cliente)', 'Perso')
     ORDER BY b.next_contact ASC
-  `).all();
+  `).all(req.userId);
 
   const scored = rows.map((b) => ({ ...b, lead_score: computeLeadScore(b) }));
   res.json(scored);
@@ -284,9 +291,10 @@ router.get("/email-stats", (req, res) => {
       et.sent_at, et.opened_at, et.open_count
     FROM email_tracking et
     JOIN businesses b ON b.id = et.business_id
+    WHERE b.user_id = ?
     ORDER BY et.sent_at DESC
     LIMIT 100
-  `).all();
+  `).all(req.userId);
 
   const totalSent = stats.length;
   const totalOpened = stats.filter((s) => s.opened_at).length;
@@ -303,8 +311,8 @@ router.get("/email-stats", (req, res) => {
 router.get("/:id", (req, res) => {
   const db = getDb();
   const business = db
-    .prepare("SELECT * FROM businesses WHERE id = ?")
-    .get(req.params.id);
+    .prepare("SELECT * FROM businesses WHERE id = ? AND user_id = ?")
+    .get(req.params.id, req.userId);
   if (!business) return res.status(404).json({ error: "Business not found" });
   res.json({ ...business, lead_score: computeLeadScore(business) });
 });
@@ -312,7 +320,7 @@ router.get("/:id", (req, res) => {
 // DELETE /api/businesses/:id
 router.delete("/:id", (req, res) => {
   const db = getDb();
-  db.prepare("DELETE FROM businesses WHERE id = ?").run(req.params.id);
+  db.prepare("DELETE FROM businesses WHERE id = ? AND user_id = ?").run(req.params.id, req.userId);
   res.json({ success: true });
 });
 
@@ -329,10 +337,10 @@ router.patch("/:id/status", (req, res) => {
   }
   const db = getDb();
   const old = db
-    .prepare("SELECT status FROM businesses WHERE id = ?")
-    .get(req.params.id);
-  const stmt = db.prepare("UPDATE businesses SET status = ? WHERE id = ?");
-  const result = stmt.run(status, req.params.id);
+    .prepare("SELECT status FROM businesses WHERE id = ? AND user_id = ?")
+    .get(req.params.id, req.userId);
+  const stmt = db.prepare("UPDATE businesses SET status = ? WHERE id = ? AND user_id = ?");
+  const result = stmt.run(status, req.params.id, req.userId);
 
   if (result.changes === 0) {
     return res.status(404).json({ error: "Business not found" });
@@ -354,8 +362,8 @@ router.patch("/:id/status", (req, res) => {
 router.patch("/:id/email", (req, res) => {
   const { email } = req.body;
   const db = getDb();
-  const stmt = db.prepare("UPDATE businesses SET email = ? WHERE id = ?");
-  const result = stmt.run(email, req.params.id);
+  const stmt = db.prepare("UPDATE businesses SET email = ? WHERE id = ? AND user_id = ?");
+  const result = stmt.run(email, req.params.id, req.userId);
 
   if (result.changes === 0) {
     return res.status(404).json({ error: "Business not found" });
@@ -367,8 +375,8 @@ router.patch("/:id/email", (req, res) => {
 router.patch("/:id/phone", (req, res) => {
   const { phone } = req.body;
   const db = getDb();
-  const stmt = db.prepare("UPDATE businesses SET phone = ? WHERE id = ?");
-  const result = stmt.run(phone, req.params.id);
+  const stmt = db.prepare("UPDATE businesses SET phone = ? WHERE id = ? AND user_id = ?");
+  const result = stmt.run(phone, req.params.id, req.userId);
 
   if (result.changes === 0) {
     return res.status(404).json({ error: "Business not found" });
@@ -380,8 +388,8 @@ router.patch("/:id/phone", (req, res) => {
 router.patch("/:id/website", (req, res) => {
   const { website } = req.body;
   const db = getDb();
-  const stmt = db.prepare("UPDATE businesses SET website = ? WHERE id = ?");
-  const result = stmt.run(website, req.params.id);
+  const stmt = db.prepare("UPDATE businesses SET website = ? WHERE id = ? AND user_id = ?");
+  const result = stmt.run(website, req.params.id, req.userId);
 
   if (result.changes === 0) {
     return res.status(404).json({ error: "Business not found" });
@@ -394,8 +402,8 @@ router.patch("/:id/vat", (req, res) => {
   const { vat_number } = req.body;
   const db = getDb();
   const result = db
-    .prepare("UPDATE businesses SET vat_number = ? WHERE id = ?")
-    .run(vat_number ?? null, req.params.id);
+    .prepare("UPDATE businesses SET vat_number = ? WHERE id = ? AND user_id = ?")
+    .run(vat_number ?? null, req.params.id, req.userId);
 
   if (result.changes === 0) {
     return res.status(404).json({ error: "Business not found" });
@@ -408,9 +416,9 @@ router.patch("/:id/details", (req, res) => {
   const { notes, next_contact } = req.body;
   const db = getDb();
   const stmt = db.prepare(
-    "UPDATE businesses SET notes = ?, next_contact = ? WHERE id = ?",
+    "UPDATE businesses SET notes = ?, next_contact = ? WHERE id = ? AND user_id = ?",
   );
-  const result = stmt.run(notes, next_contact, req.params.id);
+  const result = stmt.run(notes, next_contact, req.params.id, req.userId);
 
   if (result.changes === 0) {
     return res.status(404).json({ error: "Business not found" });
@@ -423,8 +431,8 @@ router.patch("/:id/next-contact", (req, res) => {
   const { next_contact } = req.body;
   const db = getDb();
   const result = db
-    .prepare("UPDATE businesses SET next_contact = ? WHERE id = ?")
-    .run(next_contact ?? "", req.params.id);
+    .prepare("UPDATE businesses SET next_contact = ? WHERE id = ? AND user_id = ?")
+    .run(next_contact ?? "", req.params.id, req.userId);
 
   if (result.changes === 0) {
     return res.status(404).json({ error: "Business not found" });
@@ -436,9 +444,9 @@ router.patch("/:id/next-contact", (req, res) => {
 router.patch("/:id/opt-out", (req, res) => {
   const db = getDb();
   const stmt = db.prepare(
-    "UPDATE businesses SET is_blacklisted = 1, status = 'Perso', notes = IFNULL(notes || '\n', '') || '[GDPR] Richiesta disiscrizione/Opt-out' WHERE id = ?",
+    "UPDATE businesses SET is_blacklisted = 1, status = 'Perso', notes = IFNULL(notes || '\n', '') || '[GDPR] Richiesta disiscrizione/Opt-out' WHERE id = ? AND user_id = ?",
   );
-  const result = stmt.run(req.params.id);
+  const result = stmt.run(req.params.id, req.userId);
 
   if (result.changes === 0) {
     return res.status(404).json({ error: "Business not found" });
@@ -453,9 +461,9 @@ router.patch("/:id/opt-out", (req, res) => {
 router.patch("/:id/undo-opt-out", (req, res) => {
   const db = getDb();
   const stmt = db.prepare(
-    "UPDATE businesses SET is_blacklisted = 0, notes = IFNULL(notes || '\n', '') || '[GDPR] Opt-out annullato manualmente' WHERE id = ?",
+    "UPDATE businesses SET is_blacklisted = 0, notes = IFNULL(notes || '\n', '') || '[GDPR] Opt-out annullato manualmente' WHERE id = ? AND user_id = ?",
   );
-  const result = stmt.run(req.params.id);
+  const result = stmt.run(req.params.id, req.userId);
 
   if (result.changes === 0) {
     return res.status(404).json({ error: "Business not found" });
@@ -469,9 +477,7 @@ router.patch("/:id/undo-opt-out", (req, res) => {
 // POST /api/businesses/:id/scan-social — On-demand social scan per un singolo business
 router.post("/:id/scan-social", async (req, res) => {
   const db = getDb();
-  const biz = db
-    .prepare("SELECT * FROM businesses WHERE id = ?")
-    .get(req.params.id);
+  const biz = getOwnedBusiness(db, req.params.id, req.userId);
 
   if (!biz) return res.status(404).json({ error: "Business not found" });
 
@@ -498,8 +504,8 @@ router.post("/:id/scan-social", async (req, res) => {
 
     updates.push("last_social_scan_at = CURRENT_TIMESTAMP");
 
-    values.push(req.params.id);
-    db.prepare(`UPDATE businesses SET ${updates.join(", ")} WHERE id = ?`).run(
+    values.push(req.params.id, req.userId);
+    db.prepare(`UPDATE businesses SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`).run(
       ...values,
     );
 
@@ -524,9 +530,7 @@ router.post("/:id/scan-social", async (req, res) => {
 router.post("/:id/generate-email", async (req, res) => {
   const { type = "social_only" } = req.body;
   const db = getDb();
-  const biz = db
-    .prepare("SELECT * FROM businesses WHERE id = ?")
-    .get(req.params.id);
+  const biz = getOwnedBusiness(db, req.params.id, req.userId);
 
   if (!biz) return res.status(404).json({ error: "Business not found" });
 
@@ -661,9 +665,7 @@ Firma il messaggio come: "${process.env.MY_NAME || "Luca Brizzante"}"`;
 // POST /api/businesses/:id/generate-website
 router.post("/:id/generate-website", async (req, res) => {
   const db = getDb();
-  const biz = db
-    .prepare("SELECT * FROM businesses WHERE id = ?")
-    .get(req.params.id);
+  const biz = getOwnedBusiness(db, req.params.id, req.userId);
 
   if (!biz) return res.status(404).json({ error: "Business not found" });
 
@@ -687,7 +689,7 @@ router.post("/:id/publish-website", async (req, res) => {
   if (!html) return res.status(400).json({ error: "html is required" });
 
   const db = getDb();
-  const biz = db.prepare("SELECT name FROM businesses WHERE id = ?").get(req.params.id);
+  const biz = db.prepare("SELECT name FROM businesses WHERE id = ? AND user_id = ?").get(req.params.id, req.userId);
   if (!biz) return res.status(404).json({ error: "Business not found" });
 
   try {
@@ -706,8 +708,8 @@ router.post("/:id/send-email", async (req, res) => {
 
   const db = getDb();
   const biz = db
-    .prepare("SELECT is_blacklisted FROM businesses WHERE id = ?")
-    .get(req.params.id);
+    .prepare("SELECT is_blacklisted FROM businesses WHERE id = ? AND user_id = ?")
+    .get(req.params.id, req.userId);
 
   if (!biz) return res.status(404).json({ error: "Business not found" });
 
@@ -765,8 +767,8 @@ ${trackingPixel}
 
     await transporter.sendMail(mailOptions);
 
-    db.prepare("UPDATE businesses SET status = 'Inviata Mail' WHERE id = ?")
-      .run(req.params.id);
+    db.prepare("UPDATE businesses SET status = 'Inviata Mail' WHERE id = ? AND user_id = ?")
+      .run(req.params.id, req.userId);
 
     // Auto-log email sent
     logActivity(req.params.id, "email", `Email inviata a: ${toEmail}`, {
@@ -774,6 +776,9 @@ ${trackingPixel}
       toEmail,
       trackingToken,
     });
+
+    // Schedula follow-up automatici
+    scheduleFollowUps(parseInt(req.params.id, 10), req.userId);
 
     res.json({ success: true, message: "Email inviata con successo!" });
   } catch (error) {
@@ -791,11 +796,11 @@ router.post("/delete-batch", (req, res) => {
     return res.status(400).json({ error: "ids must be an array" });
   }
   const db = getDb();
-  const deleteStmt = db.prepare("DELETE FROM businesses WHERE id = ?");
-  const deleteBatch = db.transaction((idsArr) => {
-    for (const id of idsArr) deleteStmt.run(id);
+  const deleteStmt = db.prepare("DELETE FROM businesses WHERE id = ? AND user_id = ?");
+  const deleteBatch = db.transaction((idsArr, userId) => {
+    for (const id of idsArr) deleteStmt.run(id, userId);
   });
-  deleteBatch(ids);
+  deleteBatch(ids, req.userId);
   res.json({ success: true, deleted: ids.length });
 });
 

@@ -34,8 +34,8 @@ router.post("/", async (req, res) => {
 
     const db = getDb();
     const existingNames = db
-      .prepare("SELECT name FROM businesses WHERE area = ?")
-      .all(area)
+      .prepare("SELECT name FROM businesses WHERE area = ? AND user_id = ?")
+      .all(area, req.userId)
       .map((r) => r.name);
 
     const businesses = await scrapeBusinesses(
@@ -62,9 +62,9 @@ router.post("/", async (req, res) => {
 
     const insertStmt = db.prepare(`
       INSERT OR IGNORE INTO businesses
-        (name, address, phone, website, rating, review_count, email, vat_number, category, area, maps_url, is_claimed, facebook_url, instagram_url, social_last_active)
+        (name, address, phone, website, rating, review_count, email, vat_number, category, area, maps_url, is_claimed, facebook_url, instagram_url, social_last_active, user_id)
       VALUES
-        (@name, @address, @phone, @website, @rating, @review_count, @email, @vat_number, @category, @area, @maps_url, @is_claimed, @facebook_url, @instagram_url, @social_last_active)
+        (@name, @address, @phone, @website, @rating, @review_count, @email, @vat_number, @category, @area, @maps_url, @is_claimed, @facebook_url, @instagram_url, @social_last_active, @user_id)
     `);
 
     let savedCount = 0;
@@ -87,6 +87,7 @@ router.post("/", async (req, res) => {
         facebook_url: biz.facebook_url ?? null,
         instagram_url: biz.instagram_url ?? null,
         social_last_active: biz.social_last_active ?? null,
+        user_id: req.userId,
       };
 
       try {
