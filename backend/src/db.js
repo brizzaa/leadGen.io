@@ -94,6 +94,15 @@ export function getDb() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(campaign_id, business_id)
       );
+      CREATE TABLE IF NOT EXISTS email_tracking (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_id INTEGER NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        opened_at DATETIME,
+        open_count INTEGER DEFAULT 0,
+        sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
+      );
     `);
 
     // Migration sicura: aggiunge vat_number ai DB già esistenti senza la colonna

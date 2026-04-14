@@ -10,6 +10,7 @@ import groupsRouter from "./routes/groups.js";
 import activityRouter from "./routes/activity.js";
 import documentsRouter from "./routes/documents.js";
 import campaignsRouter from "./routes/campaigns.js";
+import trackingRouter from "./routes/tracking.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -28,6 +29,7 @@ app.use("/api/groups", groupsRouter);
 app.use("/api/activity", activityRouter);
 app.use("/api/documents", documentsRouter);
 app.use("/api/campaigns", campaignsRouter);
+app.use("/api/track", trackingRouter);
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));
 
