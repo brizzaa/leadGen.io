@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { RefreshCw, Download, X, Loader2, Globe, Copy, Check } from "lucide-react";
+import { RefreshCw, Download, X, Loader2, Globe, Copy, Check, Code, Eye } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -11,16 +11,30 @@ export default function WebsitePreviewDialog({
   businessId,
   onRegenerate,
   isRegenerating,
+  onHtmlChange,
 }) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState(null);
   const [publishError, setPublishError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editedHtml, setEditedHtml] = useState("");
 
   if (!open) return null;
 
+  const currentHtml = editMode ? editedHtml : html;
+
+  const handleToggleEdit = () => {
+    if (!editMode) {
+      setEditedHtml(html);
+    } else if (onHtmlChange) {
+      onHtmlChange(editedHtml);
+    }
+    setEditMode(!editMode);
+  };
+
   const handleDownload = () => {
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const blob = new Blob([currentHtml], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const slug = businessName
       .toLowerCase()
@@ -46,8 +60,11 @@ export default function WebsitePreviewDialog({
     try {
       const res = await fetch(`${API_URL}/api/businesses/${businessId}/publish-website`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({ html: currentHtml }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Errore sconosciuto");
@@ -74,6 +91,17 @@ export default function WebsitePreviewDialog({
             {businessName} — Sito Vetrina
           </span>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggleEdit}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                editMode
+                  ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                  : "border-border hover:bg-muted"
+              }`}
+            >
+              {editMode ? <Eye className="w-3.5 h-3.5" /> : <Code className="w-3.5 h-3.5" />}
+              {editMode ? "Anteprima" : "Modifica HTML"}
+            </button>
             <button
               onClick={onRegenerate}
               disabled={isRegenerating || isPublishing}
@@ -114,7 +142,6 @@ export default function WebsitePreviewDialog({
           </div>
         </div>
 
-        {/* URL pubblicato */}
         {publishedUrl && (
           <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 border-t border-green-500/20 text-xs">
             <span className="text-green-600 dark:text-green-400 font-medium">Pubblicato:</span>
@@ -136,7 +163,6 @@ export default function WebsitePreviewDialog({
           </div>
         )}
 
-        {/* Errore pubblicazione */}
         {publishError && (
           <div className="px-4 py-2 bg-red-500/10 border-t border-red-500/20 text-xs text-red-600 dark:text-red-400">
             Errore: {publishError}
@@ -144,14 +170,35 @@ export default function WebsitePreviewDialog({
         )}
       </div>
 
-      {/* Iframe Preview */}
+      {/* Content area */}
       <div className="flex-1 overflow-hidden">
-        <iframe
-          srcDoc={html}
-          title="Website Preview"
-          className="w-full h-full border-0"
-          sandbox="allow-scripts"
-        />
+        {editMode ? (
+          <div className="flex h-full">
+            {/* Editor */}
+            <textarea
+              value={editedHtml}
+              onChange={(e) => setEditedHtml(e.target.value)}
+              className="w-1/2 h-full p-4 font-mono text-xs bg-zinc-950 text-zinc-200 border-r border-border resize-none focus:outline-none"
+              spellCheck={false}
+            />
+            {/* Live preview */}
+            <div className="w-1/2 h-full overflow-hidden">
+              <iframe
+                srcDoc={editedHtml}
+                title="Live Preview"
+                className="w-full h-full border-0"
+                sandbox="allow-scripts"
+              />
+            </div>
+          </div>
+        ) : (
+          <iframe
+            srcDoc={html}
+            title="Website Preview"
+            className="w-full h-full border-0"
+            sandbox="allow-scripts"
+          />
+        )}
       </div>
     </div>
   );
