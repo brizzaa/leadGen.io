@@ -1,9 +1,117 @@
 import { chromium } from "playwright";
+import axios from "axios";
+import * as cheerio from "cheerio";
 
 /** Random delay between min and max ms to appear human */
 function randomDelay(min = 1500, max = 4000) {
   const ms = Math.floor(Math.random() * (max - min + 1)) + min;
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Scrapa un sito web per estrarre email e telefono dalla pagina.
+ * @param {string} websiteUrl
+ * @returns {Promise<{email: string|null, phone: string|null}>}
+ */
+async function scrapeContactsFromWebsite(websiteUrl) {
+  if (!websiteUrl) return { email: null, phone: null };
+
+  const lower = websiteUrl.toLowerCase();
+  // Salta pagine social/directory — non contengono contatti utili
+  if (
+    lower.includes("facebook.com") ||
+    lower.includes("instagram.com") ||
+    lower.includes("tripadvisor.") ||
+    lower.includes("paginegialle.") ||
+    lower.includes("yelp.")
+  ) {
+    return { email: null, phone: null };
+  }
+
+  try {
+    let url = websiteUrl;
+    if (!url.startsWith("http")) url = "https://" + url;
+
+    const response = await axios.get(url, {
+      timeout: 10000,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      },
+      maxRedirects: 5,
+    });
+
+    const html = response.data;
+    const $ = cheerio.load(html);
+
+    // Rimuovi script/style per evitare falsi positivi
+    $("script, style, noscript").remove();
+    const text = $("body").text();
+
+    // --- EMAIL ---
+    // Cerca in href="mailto:..." (più affidabile)
+    let email = null;
+    $('a[href^="mailto:"]').each((_, el) => {
+      if (!email) {
+        const href = $(el).attr("href");
+        const addr = href.replace("mailto:", "").split("?")[0].trim().toLowerCase();
+        // Ignora email generiche tipo info@example.com di CMS/template
+        if (addr && addr.includes("@") && !addr.includes("@example.") && !addr.includes("@sentry.")) {
+          email = addr;
+        }
+      }
+    });
+
+    // Fallback: regex nel testo della pagina
+    if (!email) {
+      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+      const matches = text.match(emailRegex) || [];
+      for (const m of matches) {
+        const low = m.toLowerCase();
+        if (
+          !low.includes("@example.") &&
+          !low.includes("@sentry.") &&
+          !low.includes("@wixpress.") &&
+          !low.includes(".png") &&
+          !low.includes(".jpg") &&
+          !low.endsWith(".js")
+        ) {
+          email = low;
+          break;
+        }
+      }
+    }
+
+    // --- TELEFONO ---
+    let phone = null;
+    $('a[href^="tel:"]').each((_, el) => {
+      if (!phone) {
+        const href = $(el).attr("href");
+        phone = href.replace("tel:", "").trim();
+      }
+    });
+
+    // Fallback: regex per numeri italiani nel testo
+    if (!phone) {
+      const phoneRegex = /(?:\+39\s?)?(?:0\d{1,4}[\s.-]?\d{4,8}|3[0-9]{2}[\s.-]?\d{6,7})/g;
+      const matches = text.match(phoneRegex) || [];
+      if (matches.length > 0) {
+        // Prendi il primo numero che sembra un telefono reale (>= 8 cifre)
+        for (const m of matches) {
+          const digits = m.replace(/\D/g, "");
+          if (digits.length >= 8 && digits.length <= 13) {
+            phone = m.trim();
+            break;
+          }
+        }
+      }
+    }
+
+    return { email, phone };
+  } catch (e) {
+    // Sito non raggiungibile, timeout, etc.
+    return { email: null, phone: null };
+  }
 }
 
 /** Domìni da escludere sempre dai risultati deep-scan */
@@ -311,6 +419,30 @@ export async function scrapeBusinesses(
             }
           }
 
+          // Email — Google Maps a volte la mostra nel pannello
+          let email = null;
+          const emailEl = container.querySelector(
+            '[data-item-id^="email"] .Io6YTe, [data-item-id^="email"] .fontBodyMedium',
+          );
+          if (emailEl) {
+            email = emailEl.textContent.trim();
+          }
+          // Fallback: cerca mailto: link nel pannello
+          if (!email) {
+            const mailtoEl = container.querySelector('a[href^="mailto:"]');
+            if (mailtoEl) {
+              email = mailtoEl.href.replace("mailto:", "").split("?")[0].trim();
+            }
+          }
+          // Fallback: regex email nel testo del pannello
+          if (!email) {
+            const panelText = container.textContent || "";
+            const emailMatch = panelText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+            if (emailMatch && !emailMatch[0].includes("@google.") && !emailMatch[0].includes("@gstatic.")) {
+              email = emailMatch[0].toLowerCase();
+            }
+          }
+
           // Orari apertura — indicatore di "attività attiva"
           const hoursEl = container.querySelector(
             '[data-item-id="oh"] .Io6YTe, [aria-label*="orari"] .Io6YTe',
@@ -329,6 +461,7 @@ export async function scrapeBusinesses(
             name,
             address,
             phone,
+            email,
             website,
             rating,
             review_count,
@@ -417,6 +550,47 @@ export async function scrapeBusinesses(
         }
       }
       await searchPage.close();
+    }
+
+    // =========================================================
+    // CONTACT SCRAPE — visita i siti web per estrarre email/telefono
+    // =========================================================
+    const needsContacts = businesses.filter(
+      (b) => b.website && (!b.email || !b.phone),
+    );
+
+    if (needsContacts.length > 0 && !signal.aborted) {
+      onProgress(
+        `📧 Contact Scrape — cerco email/telefono nei siti di ${needsContacts.length} attività...`,
+      );
+
+      for (let i = 0; i < needsContacts.length; i++) {
+        if (signal.aborted) break;
+        const b = needsContacts[i];
+        try {
+          const contacts = await scrapeContactsFromWebsite(b.website);
+          let found = [];
+          if (contacts.email && !b.email) {
+            b.email = contacts.email;
+            found.push(`email: ${contacts.email}`);
+          }
+          if (contacts.phone && !b.phone) {
+            b.phone = contacts.phone;
+            found.push(`tel: ${contacts.phone}`);
+          }
+          if (found.length > 0) {
+            onProgress(
+              `📧 [${i + 1}/${needsContacts.length}] ${b.name} → ${found.join(", ")}`,
+            );
+          } else {
+            onProgress(
+              `📧 [${i + 1}/${needsContacts.length}] ${b.name} → nessun contatto nel sito`,
+            );
+          }
+        } catch (_) {
+          // ignora errori singoli
+        }
+      }
     }
 
     onProgress(

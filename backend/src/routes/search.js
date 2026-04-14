@@ -78,7 +78,7 @@ router.post("/", async (req, res) => {
         website: biz.website ?? null,
         rating: biz.rating ?? null,
         review_count: biz.review_count ?? null,
-        email: null,
+        email: biz.email ?? null,
         vat_number: null, // verrà estratta in background
         category: biz.category ?? category,
         area: biz.area ?? area,
