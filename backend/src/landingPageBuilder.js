@@ -3,8 +3,60 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { execFileSync } from "child_process";
 import { tmpdir } from "os";
+import { createHash } from "crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Pubblica un file HTML su Netlify tramite file-digest API.
+ * @param {string} html
+ * @param {string} slug
+ * @returns {Promise<string>} URL pubblico del sito
+ */
+export async function deployToNetlify(html, slug) {
+  const netlifyToken = process.env.NETLIFY_TOKEN;
+  if (!netlifyToken) throw new Error("NETLIFY_TOKEN non configurato nel .env");
+
+  const { default: axios } = await import("axios");
+  const randomId = Math.random().toString(36).slice(2, 8);
+  const siteName = `leadgen-${slug}-${randomId}`;
+
+  const fileBuffer = Buffer.from(html, "utf-8");
+  const sha1 = createHash("sha1").update(fileBuffer).digest("hex");
+  const jsonHeaders = {
+    Authorization: `Bearer ${netlifyToken}`,
+    "Content-Type": "application/json",
+  };
+
+  const siteRes = await axios.post(
+    "https://api.netlify.com/api/v1/sites",
+    { name: siteName },
+    { headers: jsonHeaders, timeout: 30000 }
+  );
+  const siteId = siteRes.data.id;
+  const siteUrl = siteRes.data.ssl_url || siteRes.data.url;
+
+  const deployRes = await axios.post(
+    `https://api.netlify.com/api/v1/sites/${siteId}/deploys`,
+    { files: { "/index.html": sha1 } },
+    { headers: jsonHeaders, timeout: 30000 }
+  );
+  const deployId = deployRes.data.id;
+
+  await axios.put(
+    `https://api.netlify.com/api/v1/deploys/${deployId}/files/index.html`,
+    fileBuffer,
+    {
+      headers: {
+        Authorization: `Bearer ${netlifyToken}`,
+        "Content-Type": "application/octet-stream",
+      },
+      timeout: 30000,
+    }
+  );
+
+  return siteUrl;
+}
 
 /**
  * Determina il template da usare in base ai dati del business.
@@ -35,36 +87,190 @@ export function determineTemplate(business) {
   return "local-pro";
 }
 
+/** Stili disponibili per la generazione del sito */
+export const WEBSITE_STYLES = {
+  auto: { label: "Automatico", desc: "Scelto in base alla categoria del business", prompt: "" },
+  elegant: { label: "Elegante", desc: "Minimalista, tipografia raffinata, colori neutri", prompt: "Design style: ELEGANT MINIMALIST. Use a refined serif + sans-serif font pairing (e.g. Playfair Display + DM Sans). Muted color palette (cream, charcoal, gold accents). Generous whitespace, large typography, subtle hover animations. Think luxury brand website." },
+  bold: { label: "Audace", desc: "Colori vivaci, layout dinamico, forte impatto", prompt: "Design style: BOLD & DYNAMIC. Use a strong geometric sans-serif (e.g. Space Grotesk or Outfit). Vibrant contrasting colors, large headings, asymmetric layouts, strong call-to-action buttons. Think startup landing page." },
+  warm: { label: "Caldo", desc: "Toni caldi, sensazione accogliente, perfetto per food/hospitality", prompt: "Design style: WARM & INVITING. Use a warm font pairing (e.g. Libre Baskerville + Source Sans 3). Earth tones palette (terracotta, olive, cream, warm brown). Rounded corners, soft shadows, cozy feel. Think artisan restaurant or bakery." },
+  professional: { label: "Professionale", desc: "Corporate, pulito, affidabile", prompt: "Design style: PROFESSIONAL CORPORATE. Use a clean sans-serif (e.g. Outfit or Sora). Blue/navy/white palette with one accent color. Sharp corners, structured grid, trust badges prominent. Think law firm or consulting agency." },
+  creative: { label: "Creativo", desc: "Colorato, giocoso, ideale per settore creativo", prompt: "Design style: CREATIVE & PLAYFUL. Use a distinctive display font (e.g. Sora or Space Grotesk) with fun weights. Gradient backgrounds, colorful illustrations style, playful micro-animations. Think design studio or creative agency." },
+};
+
+/** Engine disponibili per la generazione */
+export const WEBSITE_ENGINES = {
+  stitch: { label: "Stitch (Google)", desc: "UI specializzato, design più coerente" },
+  gemini_pro: { label: "Gemini 2.5 Pro", desc: "Alta qualità, 100 req/giorno free" },
+  gemini_flash: { label: "Gemini 2.5 Flash", desc: "Veloce, 250 req/giorno free" },
+};
+
 /**
- * Inietta il contenuto Gemini nel template HTML.
- * @param {object} content — oggetto JSON generato da Gemini
- * @param {string} templateName — "local-pro" | "digital-presence" | "social-first"
- * @param {object} business — dati del business dal DB
- * @returns {string} HTML finale
+ * Costruisce il prompt Gemini per la landing page.
  */
-export function buildLandingPage(content, templateName, business) {
-  const templatePath = join(__dirname, "templates", `${templateName}.html`);
-  let html = readFileSync(templatePath, "utf8");
+function buildWebsitePrompt(biz, style) {
+  const socials = [biz.facebook_url, biz.instagram_url].filter(Boolean);
+  const hasSocials = socials.length > 0;
+  const hasRating = biz.rating && biz.review_count;
 
-  const replacements = {
-    "{{HEADLINE}}": content.headline || business.name,
-    "{{SUBHEADLINE}}": content.subheadline || "",
-    "{{SERVICE_1}}": content.services?.[0] || "Servizio professionale",
-    "{{SERVICE_2}}": content.services?.[1] || "Qualità garantita",
-    "{{SERVICE_3}}": content.services?.[2] || "Assistenza clienti",
-    "{{CTA_TEXT}}": content.cta_text || "Contattaci",
-    "{{ACCENT_COLOR}}": content.accent_color || "#00d4aa",
-    "{{BUSINESS_NAME}}": business.name || "",
-    "{{BUSINESS_PHONE}}": business.phone || "",
-    "{{BUSINESS_EMAIL}}": business.email || "",
-    "{{BUSINESS_ADDRESS}}": business.address || "",
-  };
+  return `You are an expert web designer. Generate a COMPLETE, PRODUCTION-READY single HTML file for a local Italian business landing page.
 
-  for (const [key, value] of Object.entries(replacements)) {
-    html = html.replaceAll(key, value);
+BUSINESS INFO:
+- Name: "${biz.name}"
+- Category: ${biz.category || "Attività locale"}
+- City: ${biz.area || "Italia"}
+${biz.address ? `- Address: ${biz.address}` : ""}
+${biz.phone ? `- Phone: ${biz.phone}` : ""}
+${biz.email ? `- Email: ${biz.email}` : ""}
+${hasSocials ? `- Social: ${socials.join(", ")}` : ""}
+${hasRating ? `- Google rating: ${biz.rating}/5 (${biz.review_count} recensioni)` : ""}
+
+TECHNICAL REQUIREMENTS:
+- Single self-contained HTML file (no external files except CDN)
+- Use Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
+- Use Google Fonts: pick a DISTINCTIVE font pairing appropriate for "${biz.category || "business"}" (avoid Inter, Roboto, Open Sans — use fonts like Playfair Display, DM Sans, Outfit, Sora, Space Grotesk, Libre Baskerville, etc.)
+- Use Lucide Icons via CDN for all icons (NO emoji): <script src="https://unpkg.com/lucide@latest"></script> then <i data-lucide="icon-name"></i> and call lucide.createIcons() at the end
+- Use placeholder images from https://picsum.photos with appropriate sizes (e.g. https://picsum.photos/800/500?random=1)
+- Responsive design (mobile-first)
+- Smooth scroll behavior
+- Subtle animations on scroll (CSS only, use @keyframes and intersection observer pattern with Tailwind)
+
+DESIGN REQUIREMENTS:
+- Choose a color palette that fits the business category "${biz.category || "business"}". DO NOT default to purple/indigo. Think about what colors evoke the right feeling for this specific type of business.
+- Light or dark theme based on what fits the business category better (restaurants/food = warm light theme, tech/digital = dark, beauty/wellness = soft pastels, construction/trades = bold and industrial)
+- Configure Tailwind with custom colors in a <script> block: tailwind.config = { theme: { extend: { colors: { primary: '...', secondary: '...' }}}}
+- Professional, modern, NOT generic "AI slop". Make it look like a real business website.
+- Good whitespace, visual hierarchy, readable typography
+${WEBSITE_STYLES[style]?.prompt || ""}
+
+PAGE SECTIONS (in order):
+1. NAVBAR: sticky, business name on left, nav links on right (Servizi, Chi Siamo, Contatti), mobile hamburger menu with JS toggle
+2. HERO: full-width, gradient or image background, business name as large heading, compelling Italian tagline for this specific business type, primary CTA button ("Contattaci" or similar)${hasRating ? `, show the Google rating (${biz.rating}★ — ${biz.review_count} recensioni) as a trust badge` : ""}
+3. SERVICES: 3-4 service cards with Lucide icons. INVENT realistic services that a "${biz.category || "business"}" in Italy would actually offer. Each with title + short description.
+4. ABOUT: brief "Chi Siamo" section with a placeholder image on one side and text on the other. Write 2-3 sentences about a "${biz.category || "business"}" in ${biz.area || "Italia"}.
+5. TESTIMONIALS: 2-3 fake but realistic Italian testimonials with names and star ratings. Make them specific to "${biz.category || "this business"}".
+6. CONTACT: clean contact section with business info (address, phone, email) displayed with Lucide icons. Add a simple styled contact form (name, email, message, submit button — form action="#" is fine).${hasSocials ? ` Include social media links.` : ""}
+7. FOOTER: business name, copyright 2025, "Tutti i diritti riservati"
+
+ALL TEXT MUST BE IN ITALIAN.
+Display the real business name, phone, email and address prominently throughout.
+
+OUTPUT: Return ONLY the complete HTML code. No markdown fences, no explanations, no comments before or after. Start with <!DOCTYPE html> and end with </html>.`;
+}
+
+/**
+ * Genera HTML via Google Stitch SDK.
+ */
+async function generateWithStitch(biz, style) {
+  if (!process.env.STITCH_API_KEY) throw new Error("STITCH_API_KEY non configurata");
+
+  const { stitch } = await import("@google/stitch-sdk");
+  const { default: axios } = await import("axios");
+
+  const socials = [biz.facebook_url, biz.instagram_url].filter(Boolean);
+  const styleHint = WEBSITE_STYLES[style]?.prompt
+    ? ` ${WEBSITE_STYLES[style].prompt}`
+    : "";
+
+  const prompt = `Professional Italian business landing page for "${biz.name}".
+Type: ${biz.category || "Local business"}. City: ${biz.area || "Italy"}.
+${biz.address ? `Address: ${biz.address}.` : ""}
+${biz.phone ? `Phone: ${biz.phone}.` : ""}
+${biz.email ? `Email: ${biz.email}.` : ""}
+${socials.length ? `Social: ${socials.join(", ")}.` : ""}
+${biz.rating ? `Google rating: ${biz.rating}/5 (${biz.review_count || 0} reviews).` : ""}
+Full single-page landing with navbar, hero section, services grid, about section, testimonials, contact form with real business info, footer.
+All text in Italian. Use Tailwind CSS. Modern, elegant design. Show business name, phone and email prominently.${styleHint}`;
+
+  const project = await stitch.createProject(biz.name);
+  const screen = await project.generate(prompt);
+  const htmlUrl = await screen.getHtml();
+
+  const htmlRes = await axios.get(htmlUrl, { timeout: 60000, responseType: "text" });
+  const html = htmlRes.data;
+
+  if (!html.includes("<!DOCTYPE") && !html.includes("<html")) {
+    throw new Error("Stitch non ha restituito HTML valido");
   }
 
   return html;
+}
+
+/**
+ * Genera HTML via Gemini API.
+ */
+async function generateWithGemini(biz, style, model = "gemini-2.5-pro") {
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (!geminiApiKey) throw new Error("GEMINI_API_KEY non configurata");
+
+  const { default: axios } = await import("axios");
+  const prompt = buildWebsitePrompt(biz, style);
+
+  const response = await axios.post(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
+    {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 1,
+        maxOutputTokens: 16384,
+      },
+    },
+    { headers: { "Content-Type": "application/json" }, timeout: 120000 },
+  );
+
+  let html = response.data.candidates[0].content.parts[0].text;
+  html = html.replace(/^```html?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+
+  if (!html.includes("<!DOCTYPE") && !html.includes("<html")) {
+    throw new Error("Gemini non ha restituito HTML valido");
+  }
+
+  return html;
+}
+
+/**
+ * Genera un sito landing page completo.
+ * @param {object} biz — dati del business dal DB
+ * @param {string} [style="auto"] — stile visivo
+ * @param {string} [engine="auto"] — "stitch", "gemini_pro", "gemini_flash", o "auto"
+ * @returns {Promise<{html: string, engine: string}>} HTML + engine usato
+ */
+export async function generateWebsiteHtml(biz, style = "auto", engine = "auto") {
+  // Auto: prova Stitch se disponibile, poi Gemini Pro, poi Flash
+  if (engine === "auto") {
+    if (process.env.STITCH_API_KEY) {
+      try {
+        const html = await generateWithStitch(biz, style);
+        return { html, engine: "stitch" };
+      } catch (e) {
+        console.warn("[generate-website] Stitch fallito, fallback a Gemini Pro:", e.message);
+      }
+    }
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const html = await generateWithGemini(biz, style, "gemini-2.5-pro");
+        return { html, engine: "gemini_pro" };
+      } catch (e) {
+        console.warn("[generate-website] Gemini Pro fallito, fallback a Flash:", e.message);
+        const html = await generateWithGemini(biz, style, "gemini-2.5-flash");
+        return { html, engine: "gemini_flash" };
+      }
+    }
+    throw new Error("Nessuna API key configurata (STITCH_API_KEY o GEMINI_API_KEY)");
+  }
+
+  if (engine === "stitch") {
+    const html = await generateWithStitch(biz, style);
+    return { html, engine: "stitch" };
+  }
+
+  if (engine === "gemini_pro") {
+    const html = await generateWithGemini(biz, style, "gemini-2.5-pro");
+    return { html, engine: "gemini_pro" };
+  }
+
+  // gemini_flash
+  const html = await generateWithGemini(biz, style, "gemini-2.5-flash");
+  return { html, engine: "gemini_flash" };
 }
 
 /**
