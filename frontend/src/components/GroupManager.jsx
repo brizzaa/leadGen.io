@@ -13,6 +13,11 @@ import { Label } from "@/components/ui/label";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+}
+
 const COLORS = [
   "#3b82f6",
   "#ef4444",
@@ -37,7 +42,7 @@ export default function GroupManager({ groups, onRefresh }) {
 
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/groups`, {
+      const res = await authFetch(`${API_URL}/api/groups`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -61,7 +66,7 @@ export default function GroupManager({ groups, onRefresh }) {
     if (!confirm("Sei sicuro di voler eliminare questo gruppo?")) return;
 
     try {
-      const res = await fetch(`${API_URL}/api/groups/${id}`, {
+      const res = await authFetch(`${API_URL}/api/groups/${id}`, {
         method: "DELETE",
       });
       if (res.ok) {

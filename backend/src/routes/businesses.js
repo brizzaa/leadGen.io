@@ -6,6 +6,7 @@ import { Parser } from "json2csv";
 import { scanSocial, scanSocialBatch } from "../socialScanner.js";
 import { makeSlug, deployToNetlify, generateWebsiteHtml, WEBSITE_STYLES, WEBSITE_ENGINES } from "../landingPageBuilder.js";
 import { computeLeadScore } from "../leadScore.js";
+import { buildMobilePhoneSqlClause } from "../phoneCountries.js";
 import { scheduleFollowUps, cancelFollowUps } from "../followUpEngine.js";
 
 const router = express.Router();
@@ -37,6 +38,7 @@ router.get("/", (req, res) => {
       fewReviews,
       facebookOnly,
       unclaimedOnly,
+      mobileOnly,
       search,
       status,
       groupId,
@@ -79,6 +81,9 @@ router.get("/", (req, res) => {
     }
     if (unclaimedOnly === "true" || unclaimedOnly === true) {
       whereClauses.push("is_claimed = 0");
+    }
+    if (mobileOnly === "true" || mobileOnly === true) {
+      whereClauses.push(buildMobilePhoneSqlClause("phone"));
     }
     if (search) {
       whereClauses.push("(LOWER(name) LIKE ? OR LOWER(address) LIKE ?)");

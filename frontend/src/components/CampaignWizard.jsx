@@ -16,6 +16,11 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+}
+
 const AI_STRATEGIES = [
   { value: "auto", label: "Auto", desc: "Sceglie la strategia migliore per ogni business" },
   { value: "social_only", label: "Social Only", desc: "Per chi ha solo Facebook/Instagram" },
@@ -71,7 +76,7 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
     setSummary(null);
 
     try {
-      const res = await fetch(`${API_URL}/api/campaigns`, {
+      const res = await authFetch(`${API_URL}/api/campaigns`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -126,7 +131,7 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
     // Riavvia con i soli business falliti
     setIsRunning(true);
     try {
-      const res = await fetch(`${API_URL}/api/campaigns`, {
+      const res = await authFetch(`${API_URL}/api/campaigns`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

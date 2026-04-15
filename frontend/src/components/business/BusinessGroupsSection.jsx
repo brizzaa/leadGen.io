@@ -10,6 +10,11 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+}
+
 export default function BusinessGroupsSection({
   businessId,
   allGroups,
@@ -18,7 +23,7 @@ export default function BusinessGroupsSection({
 }) {
   const addGroup = async (groupId) => {
     try {
-      const res = await fetch(`${API_URL}/api/groups/business/${businessId}`, {
+      const res = await authFetch(`${API_URL}/api/groups/business/${businessId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ groupId }),
@@ -31,7 +36,7 @@ export default function BusinessGroupsSection({
 
   const removeGroup = async (groupId) => {
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API_URL}/api/groups/business/${businessId}/${groupId}`,
         {
           method: "DELETE",

@@ -14,6 +14,11 @@ import { Button } from "@/components/ui/button";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+}
+
 function formatBytes(bytes, decimals = 2) {
   if (!+bytes) return "0 Bytes";
   const k = 1024;
@@ -32,7 +37,7 @@ export default function BusinessDocumentsSection({ businessId }) {
   const fetchDocuments = useCallback(async () => {
     try {
       setIsLoading(true);
-      const res = await fetch(`${API_URL}/api/documents/${businessId}`);
+      const res = await authFetch(`${API_URL}/api/documents/${businessId}`);
       if (res.ok) {
         const data = await res.json();
         setDocuments(data);
@@ -57,7 +62,7 @@ export default function BusinessDocumentsSection({ businessId }) {
 
     setIsUploading(true);
     try {
-      const res = await fetch(`${API_URL}/api/documents/${businessId}`, {
+      const res = await authFetch(`${API_URL}/api/documents/${businessId}`, {
         method: "POST",
         body: formData,
       });
@@ -77,7 +82,7 @@ export default function BusinessDocumentsSection({ businessId }) {
     if (!confirm("Sei sicuro di voler eliminare questo documento?")) return;
 
     try {
-      const res = await fetch(`${API_URL}/api/documents/${docId}`, {
+      const res = await authFetch(`${API_URL}/api/documents/${docId}`, {
         method: "DELETE",
       });
       if (res.ok) {

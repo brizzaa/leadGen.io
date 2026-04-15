@@ -24,6 +24,14 @@ import "../App.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, {
+    ...options,
+    headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [businesses, setBusinesses] = useState([]);
@@ -39,6 +47,7 @@ export default function Dashboard() {
     facebookOnly: false,
     fewReviews: false,
     unclaimedOnly: false,
+    mobileOnly: false,
     status: "Tutti",
     search: "",
     groupId: null,
@@ -62,12 +71,13 @@ export default function Dashboard() {
         facebookOnly: filters.facebookOnly,
         fewReviews: filters.fewReviews,
         unclaimedOnly: filters.unclaimedOnly,
+        mobileOnly: filters.mobileOnly,
         status: filters.status,
         search: filters.search || "",
         ...(filters.groupId && { groupId: filters.groupId }),
       });
 
-      const res = await fetch(`${API_URL}/api/businesses?${params.toString()}`);
+      const res = await authFetch(`${API_URL}/api/businesses?${params.toString()}`);
       if (!res.ok) throw new Error(`Status: ${res.status}`);
       const data = await res.json();
 
@@ -86,7 +96,7 @@ export default function Dashboard() {
 
   const fetchGroups = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/groups`);
+      const res = await authFetch(`${API_URL}/api/groups`);
       if (res.ok) {
         const data = await res.json();
         setGroups(data);
@@ -106,7 +116,7 @@ export default function Dashboard() {
     setProgressMessages([]);
 
     try {
-      const response = await fetch(`${API_URL}/api/search`, {
+      const response = await authFetch(`${API_URL}/api/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ area, category }),
@@ -152,7 +162,7 @@ export default function Dashboard() {
 
   const handleStop = async () => {
     try {
-      await fetch(`${API_URL}/api/search/stop`, { method: "POST" });
+      await authFetch(`${API_URL}/api/search/stop`, { method: "POST" });
       showToast("Richiesta di stop inviata. Attendere...", "success");
     } catch {
       showToast("Impossibile fermare la ricerca", "error");
@@ -161,7 +171,7 @@ export default function Dashboard() {
 
   const handleDelete = async (id) => {
     try {
-      await fetch(`${API_URL}/api/businesses/${id}`, { method: "DELETE" });
+      await authFetch(`${API_URL}/api/businesses/${id}`, { method: "DELETE" });
       setBusinesses((prev) => prev.filter((b) => b.id !== id));
       showToast("Business eliminato");
     } catch {
@@ -171,7 +181,7 @@ export default function Dashboard() {
 
   const handleDeleteBatch = async (ids) => {
     try {
-      await fetch(`${API_URL}/api/businesses/delete-batch`, {
+      await authFetch(`${API_URL}/api/businesses/delete-batch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids }),
@@ -185,7 +195,7 @@ export default function Dashboard() {
 
   const handleStatusUpdate = async (id, newStatus) => {
     try {
-      const res = await fetch(`${API_URL}/api/businesses/${id}/status`, {
+      const res = await authFetch(`${API_URL}/api/businesses/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),

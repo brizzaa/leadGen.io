@@ -3,6 +3,11 @@ import { RefreshCw, Download, X, Loader2, Globe, Copy, Check, Code, Eye } from "
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+}
+
 export default function WebsitePreviewDialog({
   open,
   onClose,
@@ -58,7 +63,7 @@ export default function WebsitePreviewDialog({
     setIsPublishing(true);
     setPublishError(null);
     try {
-      const res = await fetch(`${API_URL}/api/businesses/${businessId}/publish-website`, {
+      const res = await authFetch(`${API_URL}/api/businesses/${businessId}/publish-website`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

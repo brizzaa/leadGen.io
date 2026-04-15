@@ -12,6 +12,7 @@ export default function EditableInfoCard({
   placeholder,
   href,
   type = "text",
+  footer,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value || "");
@@ -123,6 +124,11 @@ export default function EditableInfoCard({
         </div>
       ) : (
         <div className="text-sm font-medium text-muted-foreground">—</div>
+      )}
+      {footer && !isEditing && (
+        <div className="mt-3 pt-3 border-t border-border/40">
+          {footer}
+        </div>
       )}
     </div>
   );

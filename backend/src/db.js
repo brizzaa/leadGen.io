@@ -136,6 +136,10 @@ export function getDb() {
       db.exec("ALTER TABLE businesses ADD COLUMN user_id INTEGER REFERENCES users(id)");
       console.log("[db] Migration: colonna user_id aggiunta a businesses.");
     }
+    if (!cols.includes("country_code")) {
+      db.exec("ALTER TABLE businesses ADD COLUMN country_code TEXT DEFAULT 'IT'");
+      console.log("[db] Migration: colonna country_code aggiunta a businesses.");
+    }
 
     // Migration: user_id su campaigns
     const campCols = db.pragma("table_info(campaigns)").map((c) => c.name);

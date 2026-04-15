@@ -71,6 +71,11 @@ const STATUS_COLORS = {
 };
 
 const API_URL = import.meta.env.VITE_API_URL || "";
+
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+}
 const isFacebook = (url) => url && url.toLowerCase().includes("facebook.com");
 
 const formatUrl = (url) => {
@@ -374,7 +379,7 @@ export default function BusinessTable({
   const handleBatchAddToGroup = async (groupId) => {
     if (selectedIds.length === 0) return;
     try {
-      const res = await fetch(`${API_URL}/api/groups/${groupId}/batch-add`, {
+      const res = await authFetch(`${API_URL}/api/groups/${groupId}/batch-add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ businessIds: selectedIds }),
@@ -844,7 +849,7 @@ export default function BusinessTable({
                                   e.stopPropagation();
                                   setScanningIds((prev) => [...prev, b.id]);
                                   try {
-                                    const res = await fetch(
+                                    const res = await authFetch(
                                       `${API_URL}/api/businesses/${b.id}/scan-social`,
                                       { method: "POST" },
                                     );

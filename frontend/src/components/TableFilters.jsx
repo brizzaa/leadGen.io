@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, SlidersHorizontal, XCircle } from "lucide-react";
+import { Search, SlidersHorizontal, XCircle, Globe, Facebook, Users, HelpCircle, MessageCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -36,10 +34,11 @@ export default function TableFilters({
   }, [localSearch]);
 
   const filterItems = [
-    { key: "noWebsite", label: "Senza sito web" },
-    { key: "facebookOnly", label: "Solo Facebook" },
-    { key: "fewReviews", label: "< 10 recensioni" },
-    { key: "unclaimedOnly", label: "Non Rivendicate" },
+    { key: "noWebsite",    label: "Senza sito",     icon: <Globe className="w-3 h-3" /> },
+    { key: "facebookOnly", label: "Solo Facebook",  icon: <Facebook className="w-3 h-3" /> },
+    { key: "fewReviews",   label: "< 10 rec.",      icon: <Users className="w-3 h-3" /> },
+    { key: "unclaimedOnly",label: "Non rivendicate",icon: <HelpCircle className="w-3 h-3" /> },
+    { key: "mobileOnly",   label: "WhatsApp",       icon: <MessageCircle className="w-3 h-3" />, activeClass: "bg-[#25D366] text-white border-[#25D366] hover:bg-[#1ebe5d]" },
   ];
 
   return (
@@ -51,24 +50,24 @@ export default function TableFilters({
         </span>
 
         <div className="flex flex-wrap gap-4 lg:gap-6 items-center flex-1">
-          <div className="flex flex-wrap gap-4 items-center">
-            {filterItems.map(({ key, label }) => (
-              <div key={key} className="flex items-center gap-2">
-                <Checkbox
-                  id={`filter-${key}`}
-                  checked={filters[key]}
-                  onCheckedChange={(checked) =>
-                    onFiltersChange({ ...filters, [key]: checked })
-                  }
-                />
-                <Label
-                  htmlFor={`filter-${key}`}
-                  className="text-xs font-medium cursor-pointer"
+          <div className="flex flex-wrap gap-2 items-center">
+            {filterItems.map(({ key, label, icon, activeClass }) => {
+              const isActive = filters[key];
+              return (
+                <button
+                  key={key}
+                  onClick={() => onFiltersChange({ ...filters, [key]: !isActive })}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150 select-none ${
+                    isActive
+                      ? activeClass || "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+                  }`}
                 >
+                  {icon}
                   {label}
-                </Label>
-              </div>
-            ))}
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-2">

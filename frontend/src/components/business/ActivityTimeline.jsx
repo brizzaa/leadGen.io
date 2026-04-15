@@ -15,6 +15,11 @@ import { Button } from "@/components/ui/button";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+}
+
 const TYPE_MAP = {
   status: {
     icon: <ArrowRightLeft className="w-3.5 h-3.5" />,
@@ -78,7 +83,7 @@ export default function ActivityTimeline({ businessId }) {
 
   const fetchLogs = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/activity/${businessId}`);
+      const res = await authFetch(`${API_URL}/api/activity/${businessId}`);
       if (res.ok) {
         const data = await res.json();
         setLogs(data);
@@ -98,7 +103,7 @@ export default function ActivityTimeline({ businessId }) {
     if (!newNote.trim()) return;
     setIsAdding(true);
     try {
-      const res = await fetch(`${API_URL}/api/activity/${businessId}`, {
+      const res = await authFetch(`${API_URL}/api/activity/${businessId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "note", message: newNote.trim() }),
@@ -116,7 +121,7 @@ export default function ActivityTimeline({ businessId }) {
 
   const handleDeleteLog = async (logId) => {
     try {
-      await fetch(`${API_URL}/api/activity/log/${logId}`, { method: "DELETE" });
+      await authFetch(`${API_URL}/api/activity/log/${logId}`, { method: "DELETE" });
       setLogs((prev) => prev.filter((l) => l.id !== logId));
     } catch (e) {
       console.error(e);

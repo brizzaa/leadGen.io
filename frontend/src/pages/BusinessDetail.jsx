@@ -13,6 +13,7 @@ import {
   Loader2,
   Hash,
   Zap,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,8 +37,14 @@ import BusinessGroupsSection from "@/components/business/BusinessGroupsSection";
 import ActivityTimeline from "@/components/business/ActivityTimeline";
 import BusinessDocumentsSection from "@/components/business/BusinessDocumentsSection";
 import WebsitePreviewDialog from "@/components/business/WebsitePreviewDialog";
+import { isMobilePhone, buildWhatsAppUrl } from "@/lib/phoneCountries";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
+
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+}
 const isFacebook = (url) => url && url.toLowerCase().includes("facebook.com");
 
 const formatUrl = (url) => {
@@ -99,7 +106,7 @@ export default function BusinessDetail() {
 
   const fetchBusiness = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/businesses/${id}`);
+      const res = await authFetch(`${API_URL}/api/businesses/${id}`);
       if (res.ok) {
         const data = await res.json();
         setBusiness(data);
@@ -129,7 +136,7 @@ export default function BusinessDetail() {
 
   const fetchGroups = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/groups`);
+      const res = await authFetch(`${API_URL}/api/groups`);
       if (res.ok) {
         const data = await res.json();
         setAllGroups(data);
@@ -141,7 +148,7 @@ export default function BusinessDetail() {
 
   const fetchBusinessGroups = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/groups/business/${id}`);
+      const res = await authFetch(`${API_URL}/api/groups/business/${id}`);
       if (res.ok) {
         const data = await res.json();
         setBusinessGroups(data);
@@ -160,7 +167,7 @@ export default function BusinessDetail() {
   const handleSaveDetails = async () => {
     setIsSavingDetails(true);
     try {
-      const res = await fetch(`${API_URL}/api/businesses/${id}/details`, {
+      const res = await authFetch(`${API_URL}/api/businesses/${id}/details`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -181,7 +188,7 @@ export default function BusinessDetail() {
     if (!emailToSave) return;
     setIsSavingEmail(true);
     try {
-      const res = await fetch(`${API_URL}/api/businesses/${id}/email`, {
+      const res = await authFetch(`${API_URL}/api/businesses/${id}/email`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: emailToSave }),
@@ -207,7 +214,7 @@ export default function BusinessDetail() {
   const handleSavePhone = async (phoneToSave) => {
     setIsSavingPhone(true);
     try {
-      const res = await fetch(`${API_URL}/api/businesses/${id}/phone`, {
+      const res = await authFetch(`${API_URL}/api/businesses/${id}/phone`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: phoneToSave }),
@@ -233,7 +240,7 @@ export default function BusinessDetail() {
   const handleSaveVat = async (vatToSave) => {
     setIsSavingVat(true);
     try {
-      const res = await fetch(`${API_URL}/api/businesses/${id}/vat`, {
+      const res = await authFetch(`${API_URL}/api/businesses/${id}/vat`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ vat_number: vatToSave }),
@@ -259,7 +266,7 @@ export default function BusinessDetail() {
   const handleSaveWebsite = async (websiteToSave) => {
     setIsSavingWebsite(true);
     try {
-      const res = await fetch(`${API_URL}/api/businesses/${id}/website`, {
+      const res = await authFetch(`${API_URL}/api/businesses/${id}/website`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ website: websiteToSave }),
@@ -286,7 +293,7 @@ export default function BusinessDetail() {
     setIsGeneratingEmail(true);
     setEmailSentSuccess(false);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API_URL}/api/businesses/${id}/generate-email`,
         {
           method: "POST",
@@ -311,7 +318,7 @@ export default function BusinessDetail() {
     setIsSendingEmail(true);
     setEmailSentSuccess(false);
     try {
-      const res = await fetch(`${API_URL}/api/businesses/${id}/send-email`, {
+      const res = await authFetch(`${API_URL}/api/businesses/${id}/send-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -344,7 +351,7 @@ export default function BusinessDetail() {
   const handleStatusUpdate = async (newStatus) => {
     setStatus(newStatus);
     try {
-      await fetch(`${API_URL}/api/businesses/${id}/status`, {
+      await authFetch(`${API_URL}/api/businesses/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
@@ -357,7 +364,7 @@ export default function BusinessDetail() {
 
   const handleOptOut = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/businesses/${id}/opt-out`, {
+      const res = await authFetch(`${API_URL}/api/businesses/${id}/opt-out`, {
         method: "PATCH",
       });
       if (res.ok) {
@@ -375,7 +382,7 @@ export default function BusinessDetail() {
 
   const handleUndoOptOut = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/businesses/${id}/undo-opt-out`, {
+      const res = await authFetch(`${API_URL}/api/businesses/${id}/undo-opt-out`, {
         method: "PATCH",
       });
       if (res.ok) {
@@ -393,7 +400,7 @@ export default function BusinessDetail() {
   const handleGenerateWebsite = async () => {
     setIsGeneratingWebsite(true);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API_URL}/api/businesses/${id}/generate-website`,
         {
           method: "POST",
@@ -483,6 +490,19 @@ export default function BusinessDetail() {
             placeholder="Inserisci telefono (separati da virgola per multipli)"
             type="tel"
             href={business.phone ? `tel:${business.phone}` : null}
+            footer={
+              isMobilePhone(business.phone, business.country_code || "IT") ? (
+                <a
+                  href={buildWhatsAppUrl(business.phone, business, undefined, business.country_code || "IT")}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-medium transition-colors"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  Contatta su WhatsApp
+                </a>
+              ) : null
+            }
           />
 
           <EditableInfoCard

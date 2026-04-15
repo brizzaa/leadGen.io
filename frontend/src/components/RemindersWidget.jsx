@@ -5,6 +5,11 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+function authFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+  return fetch(url, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -40,7 +45,7 @@ export default function RemindersWidget() {
   useEffect(() => {
     const fetch_ = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/activity/reminders/due`);
+        const res = await authFetch(`${API_URL}/api/activity/reminders/due`);
         if (res.ok) {
           const data = await res.json();
           setReminders(data);
@@ -62,7 +67,7 @@ export default function RemindersWidget() {
     e.stopPropagation();
     setDismissing(id);
     try {
-      await fetch(`${API_URL}/api/businesses/${id}/next-contact`, {
+      await authFetch(`${API_URL}/api/businesses/${id}/next-contact`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ next_contact: "" }),
