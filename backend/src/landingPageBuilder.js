@@ -157,6 +157,112 @@ Display the real business name, phone, email and address prominently throughout.
 OUTPUT: Return ONLY the complete HTML code. No markdown fences, no explanations, no comments before or after. Start with <!DOCTYPE html> and end with </html>.`;
 }
 
+/** Keyword Pexels/Unsplash per categoria business */
+const CATEGORY_IMAGE_KEYWORDS = {
+  ristorante:    ["italian restaurant interior", "pasta dish", "restaurant table candles"],
+  pizzeria:      ["pizza neapolitan", "pizzeria wood oven", "italian pizza"],
+  bar:           ["italian espresso coffee bar", "barista coffee", "cafe interior"],
+  pasticceria:   ["italian pastry shop", "croissants pastries", "bakery display"],
+  gelateria:     ["gelato shop colorful", "italian ice cream", "gelateria"],
+  parrucchiere:  ["hair salon interior", "hairstylist work", "barbershop modern"],
+  estetica:      ["beauty spa treatment", "wellness massage", "nail salon luxury"],
+  dentista:      ["dental clinic modern", "dentist office bright", "dental care"],
+  avvocato:      ["law office elegant", "lawyer desk books", "legal consultation"],
+  commercialista:["accounting office", "financial advisor desk", "business meeting"],
+  idraulico:     ["plumber professional work", "bathroom renovation", "pipes plumbing"],
+  elettricista:  ["electrician work", "electrical panel modern", "wiring professional"],
+  palestra:      ["gym fitness modern", "workout training", "gym equipment"],
+  yoga:          ["yoga studio calm", "meditation wellness", "yoga pose natural light"],
+  farmacia:      ["pharmacy interior modern", "pharmacist professional", "medicine health"],
+  ottico:        ["optical store eyewear", "glasses boutique", "optician shop"],
+  autofficina:   ["auto repair garage", "mechanic car service", "automotive workshop"],
+  immobiliare:   ["luxury home exterior", "real estate modern house", "apartment interior design"],
+  default:       ["small business interior", "local shop italy", "professional workspace"],
+};
+
+function getCategoryImageKeywords(category) {
+  if (!category) return CATEGORY_IMAGE_KEYWORDS.default;
+  const cat = category.toLowerCase();
+  for (const [key, kws] of Object.entries(CATEGORY_IMAGE_KEYWORDS)) {
+    if (cat.includes(key)) return kws;
+  }
+  return CATEGORY_IMAGE_KEYWORDS.default;
+}
+
+/**
+ * Recupera URL immagini reali.
+ * Usa Pexels se PEXELS_API_KEY disponibile, altrimenti Unsplash Source (no key).
+ */
+async function fetchRealImageUrls(keywords, count = 6) {
+  const { default: axios } = await import("axios");
+
+  if (process.env.PEXELS_API_KEY) {
+    try {
+      const query = keywords[0]; // keyword principale
+      const res = await axios.get("https://api.pexels.com/v1/search", {
+        headers: { Authorization: process.env.PEXELS_API_KEY },
+        params: { query, per_page: count, orientation: "landscape" },
+        timeout: 10000,
+      });
+      const urls = res.data.photos.map(p => p.src.large);
+      if (urls.length) return urls;
+    } catch (e) {
+      console.warn("[images] Pexels fallito:", e.message);
+    }
+  }
+
+  // Fallback: Unsplash Source (nessuna API key, immagini pertinenti)
+  return keywords.flatMap((kw, ki) =>
+    Array.from({ length: Math.ceil(count / keywords.length) }, (_, i) => {
+      const encoded = encodeURIComponent(kw);
+      const sizes = ["1600x900", "1200x800", "800x600"];
+      return `https://source.unsplash.com/featured/${sizes[i % sizes.length]}/?${encoded}&sig=${ki * 10 + i}`;
+    })
+  ).slice(0, count);
+}
+
+/**
+ * Post-processor: sostituisce img src e background-image nell'HTML
+ * con foto reali e pertinenti alla categoria del business.
+ */
+async function replaceImagesWithReal(html, biz) {
+  const keywords = getCategoryImageKeywords(biz.category);
+  let imageUrls;
+  try {
+    imageUrls = await fetchRealImageUrls(keywords, 8);
+  } catch (e) {
+    console.warn("[images] Impossibile recuperare immagini reali:", e.message);
+    return html;
+  }
+  if (!imageUrls.length) return html;
+
+  let idx = 0;
+  const nextUrl = () => imageUrls[idx++ % imageUrls.length];
+
+  // Sostituisce <img src="...">
+  html = html.replace(
+    /<img([^>]*?)src=["']([^"']+)["']([^>]*?)>/gi,
+    (match, before, src, after) => {
+      // Salta data URI, SVG, icone piccole
+      if (src.startsWith("data:") || src.includes(".svg") || src.includes("icon") || src.includes("logo")) {
+        return match;
+      }
+      return `<img${before}src="${nextUrl()}"${after}>`;
+    }
+  );
+
+  // Sostituisce background-image: url(...)
+  html = html.replace(
+    /background-image\s*:\s*url\(["']?([^"')]+)["']?\)/gi,
+    (match, url) => {
+      if (url.startsWith("data:") || url.includes(".svg") || url === "none") return match;
+      return `background-image: url('${nextUrl()}')`;
+    }
+  );
+
+  return html;
+}
+
 /**
  * Design spec per categoria — usata da Stitch per differenziare visivamente.
  * Stitch risponde meglio a prompt brevi, visivi e specifici.
@@ -280,42 +386,43 @@ async function generateWithGemini(biz, style, model = "gemini-2.5-pro") {
  * @returns {Promise<{html: string, engine: string}>} HTML + engine usato
  */
 export async function generateWebsiteHtml(biz, style = "auto", engine = "auto") {
+  let rawHtml, usedEngine;
+
   // Auto: prova Stitch se disponibile, poi Gemini Pro, poi Flash
   if (engine === "auto") {
     if (process.env.STITCH_API_KEY) {
       try {
-        const html = await generateWithStitch(biz, style);
-        return { html, engine: "stitch" };
+        rawHtml = await generateWithStitch(biz, style);
+        usedEngine = "stitch";
       } catch (e) {
         console.warn("[generate-website] Stitch fallito, fallback a Gemini Pro:", e.message);
       }
     }
-    if (process.env.GEMINI_API_KEY) {
+    if (!rawHtml && process.env.GEMINI_API_KEY) {
       try {
-        const html = await generateWithGemini(biz, style, "gemini-2.5-pro");
-        return { html, engine: "gemini_pro" };
+        rawHtml = await generateWithGemini(biz, style, "gemini-2.5-pro");
+        usedEngine = "gemini_pro";
       } catch (e) {
         console.warn("[generate-website] Gemini Pro fallito, fallback a Flash:", e.message);
-        const html = await generateWithGemini(biz, style, "gemini-2.5-flash");
-        return { html, engine: "gemini_flash" };
+        rawHtml = await generateWithGemini(biz, style, "gemini-2.5-flash");
+        usedEngine = "gemini_flash";
       }
     }
-    throw new Error("Nessuna API key configurata (STITCH_API_KEY o GEMINI_API_KEY)");
+    if (!rawHtml) throw new Error("Nessuna API key configurata (STITCH_API_KEY o GEMINI_API_KEY)");
+  } else if (engine === "stitch") {
+    rawHtml = await generateWithStitch(biz, style);
+    usedEngine = "stitch";
+  } else if (engine === "gemini_pro") {
+    rawHtml = await generateWithGemini(biz, style, "gemini-2.5-pro");
+    usedEngine = "gemini_pro";
+  } else {
+    rawHtml = await generateWithGemini(biz, style, "gemini-2.5-flash");
+    usedEngine = "gemini_flash";
   }
 
-  if (engine === "stitch") {
-    const html = await generateWithStitch(biz, style);
-    return { html, engine: "stitch" };
-  }
-
-  if (engine === "gemini_pro") {
-    const html = await generateWithGemini(biz, style, "gemini-2.5-pro");
-    return { html, engine: "gemini_pro" };
-  }
-
-  // gemini_flash
-  const html = await generateWithGemini(biz, style, "gemini-2.5-flash");
-  return { html, engine: "gemini_flash" };
+  // Post-processing: sostituisce immagini placeholder con foto reali
+  const html = await replaceImagesWithReal(rawHtml, biz);
+  return { html, engine: usedEngine };
 }
 
 /**
