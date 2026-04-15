@@ -158,6 +158,41 @@ OUTPUT: Return ONLY the complete HTML code. No markdown fences, no explanations,
 }
 
 /**
+ * Design spec per categoria — usata da Stitch per differenziare visivamente.
+ * Stitch risponde meglio a prompt brevi, visivi e specifici.
+ */
+const CATEGORY_DESIGN_SPEC = {
+  // Food & beverage
+  ristorante:    { palette: "warm terracotta, cream, olive green", mood: "warm cozy Italian trattoria", hero: "full-bleed food photography hero", font: "serif headings + humanist sans" },
+  pizzeria:      { palette: "red, white, green (Italian flag)", mood: "authentic Neapolitan pizzeria", hero: "stone oven pizza hero image", font: "bold italic display + clean sans" },
+  bar:           { palette: "espresso brown, gold, off-white", mood: "classic Italian espresso bar", hero: "morning coffee scene hero", font: "retro-inspired serif + modern sans" },
+  pasticceria:   { palette: "blush pink, ivory, gold", mood: "artisan patisserie", hero: "soft-lit pastries hero", font: "elegant script + light sans" },
+  gelateria:     { palette: "pastel multicolor, white, sky blue", mood: "cheerful summer gelato shop", hero: "colorful gelato display hero", font: "rounded friendly display" },
+  parrucchiere:  { palette: "black, white, rose gold", mood: "modern upscale hair salon", hero: "editorial hair styling hero", font: "fashion magazine sans-serif" },
+  estetica:      { palette: "soft blush, ivory, champagne", mood: "luxury beauty & wellness spa", hero: "serene spa atmosphere hero", font: "elegant thin serif + clean body" },
+  dentista:      { palette: "clean white, sky blue, soft teal", mood: "professional reassuring dental clinic", hero: "bright modern clinic interior hero", font: "trustworthy geometric sans" },
+  avvocato:      { palette: "navy blue, charcoal, gold", mood: "authoritative professional law firm", hero: "formal office interior with bookshelves", font: "classic serif + clean sans" },
+  commercialista:{ palette: "dark blue, silver, white", mood: "reliable financial consulting firm", hero: "clean modern office hero", font: "professional geometric sans" },
+  idraulico:     { palette: "blue, white, orange accent", mood: "reliable local tradesman", hero: "professional tools and clean plumbing", font: "bold industrial sans" },
+  elettricista:  { palette: "dark charcoal, electric yellow, white", mood: "expert electrical services", hero: "modern electrical panel / clean install", font: "strong technical sans" },
+  palestra:      { palette: "black, neon yellow, dark grey", mood: "energetic modern gym", hero: "dynamic fitness action hero", font: "bold condensed display + strong sans" },
+  yoga:          { palette: "sage green, warm sand, soft white", mood: "calm mindful wellness studio", hero: "serene yoga studio natural light", font: "soft humanist serif + light sans" },
+  farmacia:      { palette: "green, white, clean blue", mood: "trusted professional pharmacy", hero: "clean bright pharmacy interior", font: "clear legible sans-serif" },
+  ottico:        { palette: "modern grey, black, one accent color", mood: "contemporary optical boutique", hero: "designer eyewear on clean display", font: "modern geometric sans" },
+  autofficina:   { palette: "gunmetal, orange, white", mood: "professional auto repair garage", hero: "clean workshop with premium cars", font: "bold industrial display" },
+  immobiliare:   { palette: "navy, gold, white", mood: "premium real estate agency", hero: "luxury property exterior hero", font: "luxury serif + clean sans" },
+};
+
+function getCategorySpec(category) {
+  if (!category) return null;
+  const cat = category.toLowerCase();
+  for (const [key, spec] of Object.entries(CATEGORY_DESIGN_SPEC)) {
+    if (cat.includes(key)) return spec;
+  }
+  return null;
+}
+
+/**
  * Genera HTML via Google Stitch SDK.
  */
 async function generateWithStitch(biz, style) {
@@ -167,21 +202,31 @@ async function generateWithStitch(biz, style) {
   const { default: axios } = await import("axios");
 
   const socials = [biz.facebook_url, biz.instagram_url].filter(Boolean);
-  const styleHint = WEBSITE_STYLES[style]?.prompt
-    ? ` ${WEBSITE_STYLES[style].prompt}`
-    : "";
+  const spec = getCategorySpec(biz.category);
+  const styleOverride = WEBSITE_STYLES[style]?.prompt || "";
 
-  const prompt = `Professional Italian business landing page for "${biz.name}".
-Type: ${biz.category || "Local business"}. City: ${biz.area || "Italy"}.
-${biz.address ? `Address: ${biz.address}.` : ""}
-${biz.phone ? `Phone: ${biz.phone}.` : ""}
-${biz.email ? `Email: ${biz.email}.` : ""}
-${socials.length ? `Social: ${socials.join(", ")}.` : ""}
-${biz.rating ? `Google rating: ${biz.rating}/5 (${biz.review_count || 0} reviews).` : ""}
-Full single-page landing with navbar, hero section, services grid, about section, testimonials, contact form with real business info, footer.
-All text in Italian. Use Tailwind CSS. Modern, elegant design. Show business name, phone and email prominently.${styleHint}`;
+  // Prompt conciso e visivo — Stitch risponde meglio a design spec che a testo lungo
+  const designDirective = spec
+    ? `Visual identity: ${spec.palette} palette. Mood: ${spec.mood}. Hero: ${spec.hero}. Typography: ${spec.font}.`
+    : styleOverride || "Modern Italian local business landing page. Professional and clean.";
 
-  const project = await stitch.createProject(biz.name);
+  const contactLines = [
+    biz.address && `Address: ${biz.address}`,
+    biz.phone && `Phone: ${biz.phone}`,
+    biz.email && `Email: ${biz.email}`,
+    socials.length && `Social: ${socials.join(", ")}`,
+    biz.rating && `Rating: ${biz.rating}/5 (${biz.review_count || 0} reviews)`,
+  ].filter(Boolean).join(" | ");
+
+  const prompt = `Italian business landing page — "${biz.name}" — ${biz.category || "local business"} in ${biz.area || "Italy"}.
+${designDirective}${styleOverride && spec ? ` ${styleOverride}` : ""}
+Sections: sticky navbar, full-width hero with CTA, services grid (3-4 cards), about section, testimonials (2-3 Italian), contact section with form.
+${contactLines}
+All text in Italian. Tailwind CSS. Unique non-generic design. Show real contact info prominently.`;
+
+  // Unique project ID ogni generazione — evita caching di Stitch
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const project = await stitch.createProject(`${biz.name}-${uniqueId}`);
   const screen = await project.generate(prompt);
   const htmlUrl = await screen.getHtml();
 

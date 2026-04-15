@@ -16,10 +16,22 @@ export const COUNTRY_REGISTRY = {
       if (clean.startsWith("0039")) return clean.slice(4);
       return clean;
     },
-    waMessage: (business, senderName) =>
-      `Ciao! Sono ${senderName}, mi occupo di siti web professionali per attività locali come ${business.name}. ` +
-      `Ho notato che potreste beneficiare di una maggiore presenza online. ` +
-      `Posso mostrarvi una demo gratuita? Ci vogliono solo 5 minuti! 😊`,
+    waMessage: (business, senderName) => {
+      const n = business.name;
+      const hasWeb = !!business.website;
+      const hasFb  = !!business.facebook_url;
+      const fewRev = !business.review_count || business.review_count < 10;
+      const unclaimed = !business.is_claimed;
+      if (!hasWeb && !hasFb)
+        return `Ciao! Sono ${senderName}. Ho cercato ${n} online e ho notato che non avete ancora una presenza digitale. Al giorno d'oggi molti clienti cercano prima su Google — potrei aiutarvi a non perdere queste opportunità. Posso mostrarvi in 15 minuti cosa si potrebbe fare di concreto, senza impegno?`;
+      if (!hasWeb && hasFb)
+        return `Ciao! Sono ${senderName}. Ho visto ${n} su Facebook — ottimo inizio! Ho notato però che non avete ancora un sito web: molti clienti si fidano di più delle attività che ne hanno uno. Posso mostrarvi in 15 minuti cosa si potrebbe fare, senza impegno?`;
+      if (fewRev)
+        return `Ciao! Sono ${senderName}. Ho visto ${n} su Google e ho notato che avete poche recensioni online. Una reputazione digitale più solida porta molti più clienti. Posso mostrarvi in 15 minuti come migliorare la vostra visibilità, senza impegno?`;
+      if (unclaimed)
+        return `Ciao! Sono ${senderName}. Ho notato che la scheda Google di ${n} non è ancora stata rivendicata — questo significa che non controllate le informazioni che i clienti vedono. Posso aiutarvi a sistemarla e a migliorare la vostra presenza online in poco tempo?`;
+      return `Ciao! Sono ${senderName}. Ho visto ${n} online e credo ci siano opportunità concrete per migliorare la vostra presenza digitale e acquisire più clienti. Posso mostrarvi in 15 minuti alcune idee, senza impegno?`;
+    },
   },
 
   ES: {
@@ -33,10 +45,22 @@ export const COUNTRY_REGISTRY = {
       if (clean.startsWith("0034")) return clean.slice(4);
       return clean;
     },
-    waMessage: (business, senderName) =>
-      `¡Hola! Soy ${senderName}, me dedico a crear sitios web profesionales para negocios locales como ${business.name}. ` +
-      `He notado que podrían beneficiarse de mayor presencia online. ` +
-      `¿Puedo mostrarles una demo gratuita? ¡Solo 5 minutos! 😊`,
+    waMessage: (business, senderName) => {
+      const n = business.name;
+      const hasWeb = !!business.website;
+      const hasFb  = !!business.facebook_url;
+      const fewRev = !business.review_count || business.review_count < 10;
+      const unclaimed = !business.is_claimed;
+      if (!hasWeb && !hasFb)
+        return `¡Hola! Soy ${senderName}. He buscado ${n} online y he notado que todavía no tienen presencia digital. Hoy en día muchos clientes buscan primero en Google — podría ayudarles a no perder esas oportunidades. ¿Puedo mostrarles en 15 minutos qué se podría hacer, sin compromiso?`;
+      if (!hasWeb && hasFb)
+        return `¡Hola! Soy ${senderName}. He visto ${n} en Facebook — ¡buen comienzo! Pero he notado que todavía no tienen web: muchos clientes confían más en los negocios que sí la tienen. ¿Puedo mostrarles en 15 minutos qué se podría hacer, sin compromiso?`;
+      if (fewRev)
+        return `¡Hola! Soy ${senderName}. He visto ${n} en Google y he notado que tienen pocas reseñas online. Una reputación digital más sólida atrae muchos más clientes. ¿Puedo mostrarles en 15 minutos cómo mejorar su visibilidad, sin compromiso?`;
+      if (unclaimed)
+        return `¡Hola! Soy ${senderName}. He notado que el perfil de Google de ${n} no está reclamado — esto significa que no controlan la información que ven sus clientes. ¿Puedo ayudarles a solucionarlo y mejorar su presencia online?`;
+      return `¡Hola! Soy ${senderName}. He visto ${n} online y creo que hay oportunidades concretas para mejorar su presencia digital y conseguir más clientes. ¿Puedo mostrarles en 15 minutos algunas ideas, sin compromiso?`;
+    },
   },
 
   FR: {
@@ -52,10 +76,22 @@ export const COUNTRY_REGISTRY = {
       if (clean.startsWith("0")) return clean.slice(1);
       return clean;
     },
-    waMessage: (business, senderName) =>
-      `Bonjour ! Je suis ${senderName}, je crée des sites web professionnels pour des entreprises locales comme ${business.name}. ` +
-      `J'ai remarqué que vous pourriez bénéficier d'une meilleure présence en ligne. ` +
-      `Je peux vous montrer une démo gratuite en 5 minutes ! 😊`,
+    waMessage: (business, senderName) => {
+      const n = business.name;
+      const hasWeb = !!business.website;
+      const hasFb  = !!business.facebook_url;
+      const fewRev = !business.review_count || business.review_count < 10;
+      const unclaimed = !business.is_claimed;
+      if (!hasWeb && !hasFb)
+        return `Bonjour ! Je suis ${senderName}. J'ai cherché ${n} en ligne et j'ai remarqué que vous n'avez pas encore de présence digitale. Aujourd'hui, beaucoup de clients cherchent d'abord sur Google — je pourrais vous aider à ne pas manquer ces opportunités. Puis-je vous montrer en 15 minutes ce qu'on pourrait faire, sans engagement ?`;
+      if (!hasWeb && hasFb)
+        return `Bonjour ! Je suis ${senderName}. J'ai vu ${n} sur Facebook — bon début ! Mais j'ai remarqué que vous n'avez pas encore de site web : beaucoup de clients font davantage confiance aux entreprises qui en ont un. Puis-je vous montrer en 15 minutes ce qu'on pourrait faire, sans engagement ?`;
+      if (fewRev)
+        return `Bonjour ! Je suis ${senderName}. J'ai vu ${n} sur Google et j'ai remarqué que vous avez peu d'avis en ligne. Une réputation digitale plus solide attire beaucoup plus de clients. Puis-je vous montrer en 15 minutes comment améliorer votre visibilité, sans engagement ?`;
+      if (unclaimed)
+        return `Bonjour ! Je suis ${senderName}. J'ai remarqué que la fiche Google de ${n} n'est pas encore revendiquée — vous ne contrôlez donc pas les informations visibles par vos clients. Puis-je vous aider à corriger ça et améliorer votre présence en ligne ?`;
+      return `Bonjour ! Je suis ${senderName}. J'ai vu ${n} en ligne et je pense qu'il y a des opportunités concrètes pour améliorer votre présence digitale et attirer plus de clients. Puis-je vous montrer en 15 minutes quelques idées, sans engagement ?`;
+    },
   },
 
   AT: {
@@ -70,10 +106,22 @@ export const COUNTRY_REGISTRY = {
       if (clean.startsWith("0")) return clean.slice(1);
       return clean;
     },
-    waMessage: (business, senderName) =>
-      `Hallo! Ich bin ${senderName} und erstelle professionelle Websites für lokale Unternehmen wie ${business.name}. ` +
-      `Ich habe bemerkt, dass Sie von mehr Online-Präsenz profitieren könnten. ` +
-      `Darf ich Ihnen eine kostenlose Demo in 5 Minuten zeigen? 😊`,
+    waMessage: (business, senderName) => {
+      const n = business.name;
+      const hasWeb = !!business.website;
+      const hasFb  = !!business.facebook_url;
+      const fewRev = !business.review_count || business.review_count < 10;
+      const unclaimed = !business.is_claimed;
+      if (!hasWeb && !hasFb)
+        return `Hallo! Ich bin ${senderName}. Ich habe ${n} online gesucht und festgestellt, dass Sie noch keine digitale Präsenz haben. Heutzutage suchen viele Kunden zuerst bei Google — ich könnte Ihnen helfen, diese Chancen nicht zu verpassen. Darf ich Ihnen in 15 Minuten zeigen, was möglich wäre, unverbindlich?`;
+      if (!hasWeb && hasFb)
+        return `Hallo! Ich bin ${senderName}. Ich habe ${n} auf Facebook gesehen — guter Anfang! Ich habe aber bemerkt, dass Sie noch keine Website haben: viele Kunden vertrauen Unternehmen mit Website mehr. Darf ich Ihnen in 15 Minuten zeigen, was möglich wäre, unverbindlich?`;
+      if (fewRev)
+        return `Hallo! Ich bin ${senderName}. Ich habe ${n} bei Google gesehen und bemerkt, dass Sie wenige Online-Bewertungen haben. Eine stärkere digitale Reputation bringt deutlich mehr Kunden. Darf ich Ihnen in 15 Minuten zeigen, wie Sie Ihre Sichtbarkeit verbessern können, unverbindlich?`;
+      if (unclaimed)
+        return `Hallo! Ich bin ${senderName}. Ich habe bemerkt, dass das Google-Profil von ${n} noch nicht beansprucht wurde — das bedeutet, Sie haben keine Kontrolle über die Informationen, die Ihre Kunden sehen. Darf ich Ihnen helfen, das zu beheben und Ihre Online-Präsenz zu verbessern?`;
+      return `Hallo! Ich bin ${senderName}. Ich habe ${n} online gesehen und glaube, dass es konkrete Möglichkeiten gibt, Ihre digitale Präsenz zu verbessern und mehr Kunden zu gewinnen. Darf ich Ihnen in 15 Minuten einige Ideen zeigen, unverbindlich?`;
+    },
   },
 
   DE: {
@@ -88,9 +136,22 @@ export const COUNTRY_REGISTRY = {
       if (clean.startsWith("0")) return clean.slice(1);
       return clean;
     },
-    waMessage: (business, senderName) =>
-      `Hallo! Ich bin ${senderName} und erstelle professionelle Websites für lokale Unternehmen wie ${business.name}. ` +
-      `Ich würde Ihnen gerne eine kostenlose Demo in nur 5 Minuten zeigen! 😊`,
+    waMessage: (business, senderName) => {
+      const n = business.name;
+      const hasWeb = !!business.website;
+      const hasFb  = !!business.facebook_url;
+      const fewRev = !business.review_count || business.review_count < 10;
+      const unclaimed = !business.is_claimed;
+      if (!hasWeb && !hasFb)
+        return `Hallo! Ich bin ${senderName}. Ich habe ${n} online gesucht und festgestellt, dass Sie noch keine digitale Präsenz haben. Heutzutage suchen viele Kunden zuerst bei Google — ich könnte Ihnen helfen, diese Chancen nicht zu verpassen. Darf ich Ihnen in 15 Minuten zeigen, was möglich wäre, unverbindlich?`;
+      if (!hasWeb && hasFb)
+        return `Hallo! Ich bin ${senderName}. Ich habe ${n} auf Facebook gesehen — guter Anfang! Ich habe aber bemerkt, dass Sie noch keine Website haben: viele Kunden vertrauen Unternehmen mit Website mehr. Darf ich Ihnen in 15 Minuten zeigen, was möglich wäre, unverbindlich?`;
+      if (fewRev)
+        return `Hallo! Ich bin ${senderName}. Ich habe ${n} bei Google gesehen und bemerkt, dass Sie wenige Online-Bewertungen haben. Eine stärkere digitale Reputation bringt deutlich mehr Kunden. Darf ich Ihnen in 15 Minuten zeigen, wie Sie Ihre Sichtbarkeit verbessern können, unverbindlich?`;
+      if (unclaimed)
+        return `Hallo! Ich bin ${senderName}. Ich habe bemerkt, dass das Google-Profil von ${n} noch nicht beansprucht wurde — das bedeutet, Sie haben keine Kontrolle über die Informationen, die Ihre Kunden sehen. Darf ich Ihnen helfen, das zu beheben und Ihre Online-Präsenz zu verbessern?`;
+      return `Hallo! Ich bin ${senderName}. Ich habe ${n} online gesehen und glaube, dass es konkrete Möglichkeiten gibt, Ihre digitale Präsenz zu verbessern und mehr Kunden zu gewinnen. Darf ich Ihnen in 15 Minuten einige Ideen zeigen, unverbindlich?`;
+    },
   },
 };
 
