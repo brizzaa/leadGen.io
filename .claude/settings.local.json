@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(rm /Users/lucabrizzante/Documents/Progetti/findbusiness/.git/index.lock)",
+      "Bash(git -C /Users/lucabrizzante/Documents/Progetti/findbusiness add backend/src/landingPageBuilder.js)",
+      "Bash(git -C /Users/lucabrizzante/Documents/Progetti/findbusiness commit -m ' *)",
+      "mcp__plugin_claude-mem_mcp-search__get_observations",
+      "mcp__plugin_claude-mem_mcp-search__smart_outline"
+    ]
+  }
+}

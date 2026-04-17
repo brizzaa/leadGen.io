@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { makeSlug, determineTemplate, WEBSITE_STYLES, WEBSITE_ENGINES } from "../landingPageBuilder.js";
+import { makeSlug, determineTemplate, WEBSITE_STYLES, WEBSITE_ENGINES } from "../services/landingPageBuilder.js";
 
 describe("makeSlug", () => {
   it("converte nome in slug lowercase", () => {

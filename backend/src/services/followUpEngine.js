@@ -49,6 +49,7 @@ export async function processFollowUps() {
     WHERE fu.status = 'pending'
       AND fu.scheduled_at <= datetime('now')
       AND b.is_blacklisted = 0
+      AND b.follow_ups_enabled = 1
       AND b.status NOT IN ('Vinto (Cliente)', 'Perso')
     ORDER BY fu.scheduled_at ASC
     LIMIT 20

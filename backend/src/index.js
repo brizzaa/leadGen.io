@@ -5,7 +5,7 @@ import { mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import searchRouter from "./routes/search.js";
-import businessesRouter from "./routes/businesses.js";
+import businessesRouter from "./routes/businesses/index.js";
 import groupsRouter from "./routes/groups.js";
 import activityRouter from "./routes/activity.js";
 import documentsRouter from "./routes/documents.js";
@@ -13,8 +13,8 @@ import campaignsRouter from "./routes/campaigns.js";
 import trackingRouter from "./routes/tracking.js";
 import authRouter from "./routes/auth.js";
 import analyticsRouter from "./routes/analytics.js";
-import { requireAuth } from "./auth.js";
-import { startFollowUpCron } from "./followUpEngine.js";
+import { requireAuth } from "./middleware/auth.js";
+import { startFollowUpCron } from "./services/followUpEngine.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

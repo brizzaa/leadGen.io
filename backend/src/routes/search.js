@@ -1,8 +1,8 @@
 import express from "express";
-import { scrapeBusinesses } from "../scraper.js";
-import { extractEmail } from "../emailExtractor.js";
-import { extractVat } from "../vatExtractor.js";
-import { getDb } from "../db.js";
+import { scrapeBusinesses } from "../services/scraper.js";
+import { extractEmail } from "../services/emailExtractor.js";
+import { extractVat } from "../services/vatExtractor.js";
+import { getDb } from "../config/db.js";
 
 const router = express.Router();
 

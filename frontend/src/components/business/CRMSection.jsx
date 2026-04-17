@@ -5,6 +5,7 @@ import {
   Calendar as CalendarIcon,
   Loader2,
   Save,
+  Mail,
 } from "lucide-react";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -24,6 +25,9 @@ export default function CRMSection({
   onNextContactChange,
   onSave,
   isSaving,
+  followUpsEnabled,
+  onToggleFollowUps,
+  isTogglingFollowUps,
 }) {
   return (
     <section className="bg-card border border-border/50 rounded-2xl p-6 shadow-sm">
@@ -82,6 +86,33 @@ export default function CRMSection({
                 />
               </PopoverContent>
             </Popover>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground font-medium flex items-center gap-2">
+              <Mail className="w-4 h-4" />
+              Follow-up automatici
+            </label>
+            <button
+              type="button"
+              onClick={onToggleFollowUps}
+              disabled={isTogglingFollowUps}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 ${
+                followUpsEnabled ? "bg-primary" : "bg-muted"
+              }`}
+              aria-checked={followUpsEnabled}
+              role="switch"
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  followUpsEnabled ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+            <p className="text-xs text-muted-foreground">
+              {followUpsEnabled
+                ? "Email di follow-up programmate automaticamente"
+                : "Follow-up disattivati per questo business"}
+            </p>
           </div>
           <Button
             onClick={onSave}

@@ -1,8 +1,8 @@
 import express from "express";
 import axios from "axios";
 import nodemailer from "nodemailer";
-import { getDb } from "../db.js";
-import { makeSlug, deployToNetlify, generateWebsiteHtml } from "../landingPageBuilder.js";
+import { getDb } from "../config/db.js";
+import { makeSlug, deployToNetlify, generateWebsiteHtml } from "../services/landingPageBuilder.js";
 
 const router = express.Router();
 

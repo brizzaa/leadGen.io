@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { signToken, verifyToken } from "../auth.js";
+import { signToken, verifyToken } from "../middleware/auth.js";
 
 describe("JWT auth", () => {
   it("genera e verifica un token valido", () => {

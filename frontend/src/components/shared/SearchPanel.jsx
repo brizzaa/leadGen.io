@@ -9,7 +9,7 @@ import {
   XCircle,
   Folder,
 } from "lucide-react";
-import GroupManager from "./GroupManager";
+import GroupManager from "../groups/GroupManager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

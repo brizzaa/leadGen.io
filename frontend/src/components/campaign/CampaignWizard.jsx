@@ -10,34 +10,89 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
-  X, ChevronRight, ChevronLeft, Rocket, Zap, Globe, Send,
-  CheckCircle, XCircle, Loader2
+  X,
+  ChevronRight,
+  ChevronLeft,
+  Rocket,
+  Zap,
+  Globe,
+  Send,
+  CheckCircle,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 function authFetch(url, options = {}) {
   const token = localStorage.getItem("token");
-  return fetch(url, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
 }
 
 const AI_STRATEGIES = [
-  { value: "auto", label: "Auto", desc: "Sceglie la strategia migliore per ogni business" },
-  { value: "social_only", label: "Social Only", desc: "Per chi ha solo Facebook/Instagram" },
-  { value: "weak_website", label: "Sito Debole", desc: "Per chi ha un sito datato" },
-  { value: "ai_strategy", label: "AI Strategy", desc: "Analisi approfondita personalizzata" },
+  {
+    value: "auto",
+    label: "Auto",
+    desc: "Sceglie la strategia migliore per ogni business",
+  },
+  {
+    value: "social_only",
+    label: "Social Only",
+    desc: "Per chi ha solo Facebook/Instagram",
+  },
+  {
+    value: "weak_website",
+    label: "Sito Debole",
+    desc: "Per chi ha un sito datato",
+  },
+  {
+    value: "ai_strategy",
+    label: "AI Strategy",
+    desc: "Analisi approfondita personalizzata",
+  },
 ];
 
 const TEMPLATES = [
-  { value: "auto", label: "Auto", desc: "Scelto in base ai dati del business", icon: "🤖" },
-  { value: "local-pro", label: "Local Pro", desc: "Servizi locali e artigiani", icon: "🔧" },
-  { value: "digital-presence", label: "Digital Presence", desc: "Business senza sito efficace", icon: "🌐" },
-  { value: "social-first", label: "Social First", desc: "Business solo-social", icon: "📱" },
+  {
+    value: "auto",
+    label: "Auto",
+    desc: "Scelto in base ai dati del business",
+    icon: "🤖",
+  },
+  {
+    value: "local-pro",
+    label: "Local Pro",
+    desc: "Servizi locali e artigiani",
+    icon: "🔧",
+  },
+  {
+    value: "digital-presence",
+    label: "Digital Presence",
+    desc: "Business senza sito efficace",
+    icon: "🌐",
+  },
+  {
+    value: "social-first",
+    label: "Social First",
+    desc: "Business solo-social",
+    icon: "📱",
+  },
 ];
 
 const STEPS = ["Review", "Strategia AI", "Landing Page", "Invio"];
 
-export default function CampaignWizard({ open, onClose, selectedBusinesses, onCampaignComplete }) {
+export default function CampaignWizard({
+  open,
+  onClose,
+  selectedBusinesses,
+  onCampaignComplete,
+}) {
   const [step, setStep] = useState(0);
   const [businesses, setBusinesses] = useState(selectedBusinesses || []);
   const [aiStrategy, setAiStrategy] = useState("auto");
@@ -155,7 +210,10 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
         es.close();
         onCampaignComplete?.();
       });
-      es.onerror = () => { setIsRunning(false); es.close(); };
+      es.onerror = () => {
+        setIsRunning(false);
+        es.close();
+      };
     } catch {
       setIsRunning(false);
       setBusinesses(prevBusinesses);
@@ -187,11 +245,21 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
         <div className="flex items-center gap-1 mb-6">
           {STEPS.map((s, i) => (
             <div key={s} className="flex items-center gap-1 flex-1">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${i < step ? "bg-[#00d4aa] text-black" : i === step ? "bg-[#00d4aa]/20 text-[#00d4aa] border border-[#00d4aa]" : "bg-muted text-muted-foreground"}`}>
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${i < step ? "bg-[#00d4aa] text-black" : i === step ? "bg-[#00d4aa]/20 text-[#00d4aa] border border-[#00d4aa]" : "bg-muted text-muted-foreground"}`}
+              >
                 {i < step ? "✓" : i + 1}
               </div>
-              <span className={`text-xs hidden sm:block ${i === step ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s}</span>
-              {i < STEPS.length - 1 && <div className={`flex-1 h-px ${i < step ? "bg-[#00d4aa]" : "bg-border"}`} />}
+              <span
+                className={`text-xs hidden sm:block ${i === step ? "text-foreground font-medium" : "text-muted-foreground"}`}
+              >
+                {s}
+              </span>
+              {i < STEPS.length - 1 && (
+                <div
+                  className={`flex-1 h-px ${i < step ? "bg-[#00d4aa]" : "bg-border"}`}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -210,24 +278,46 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
             {step === 0 && (
               <div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  {businesses.length} business selezionati. Rimuovi quelli da escludere.
+                  {businesses.length} business selezionati. Rimuovi quelli da
+                  escludere.
                 </p>
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                   {businesses.map((b) => (
-                    <div key={b.id} className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2 text-sm">
+                    <div
+                      key={b.id}
+                      className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2 text-sm"
+                    >
                       <div>
                         <span className="font-medium">{b.name}</span>
-                        {b.area && <span className="text-muted-foreground ml-2 text-xs">{b.area}</span>}
-                        {!b.email && <Badge variant="outline" className="ml-2 text-xs text-yellow-500 border-yellow-500/30">Senza email</Badge>}
+                        {b.area && (
+                          <span className="text-muted-foreground ml-2 text-xs">
+                            {b.area}
+                          </span>
+                        )}
+                        {!b.email && (
+                          <Badge
+                            variant="outline"
+                            className="ml-2 text-xs text-yellow-500 border-yellow-500/30"
+                          >
+                            Senza email
+                          </Badge>
+                        )}
                       </div>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => removeBusiness(b.id)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeBusiness(b.id)}
+                      >
                         <X className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   ))}
                 </div>
                 {businesses.length === 0 && (
-                  <p className="text-center text-muted-foreground py-8">Nessun business rimasto. Torna indietro per aggiungerne.</p>
+                  <p className="text-center text-muted-foreground py-8">
+                    Nessun business rimasto. Torna indietro per aggiungerne.
+                  </p>
                 )}
               </div>
             )}
@@ -235,7 +325,9 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
             {/* Step 1: Strategia AI */}
             {step === 1 && (
               <div className="space-y-2">
-                <p className="text-sm text-muted-foreground mb-3">Scegli la strategia per generare le email.</p>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Scegli la strategia per generare le email.
+                </p>
                 {AI_STRATEGIES.map((s) => (
                   <button
                     key={s.value}
@@ -243,7 +335,9 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
                     className={`w-full text-left p-3 rounded-xl border transition-all ${aiStrategy === s.value ? "border-[#00d4aa] bg-[#00d4aa]/10" : "border-border hover:border-[#00d4aa]/40"}`}
                   >
                     <div className="font-medium text-sm">{s.label}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{s.desc}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {s.desc}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -252,7 +346,9 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
             {/* Step 2: Landing Page */}
             {step === 2 && (
               <div className="space-y-2">
-                <p className="text-sm text-muted-foreground mb-3">Scegli il template della landing page.</p>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Scegli il template della landing page.
+                </p>
                 {TEMPLATES.map((t) => (
                   <button
                     key={t.value}
@@ -262,7 +358,9 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
                     <span className="text-2xl">{t.icon}</span>
                     <div>
                       <div className="font-medium text-sm">{t.label}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{t.desc}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {t.desc}
+                      </div>
                     </div>
                   </button>
                 ))}
@@ -275,11 +373,17 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
                 {!isRunning && !summary && (
                   <div className="text-center py-6">
                     <Send className="w-12 h-12 text-[#00d4aa] mx-auto mb-4" />
-                    <p className="text-lg font-semibold mb-1">Pronto per l'invio</p>
-                    <p className="text-sm text-muted-foreground mb-6">
-                      Verranno elaborate <strong>{businesses.length} aziende</strong> in sequenza.
+                    <p className="text-lg font-semibold mb-1">
+                      Pronto per l'invio
                     </p>
-                    <Button onClick={startCampaign} className="bg-[#00d4aa] text-black hover:bg-[#00d4aa]/90 font-bold">
+                    <p className="text-sm text-muted-foreground mb-6">
+                      Verranno elaborate{" "}
+                      <strong>{businesses.length} aziende</strong> in sequenza.
+                    </p>
+                    <Button
+                      onClick={startCampaign}
+                      className="bg-[#00d4aa] text-black hover:bg-[#00d4aa]/90 font-bold"
+                    >
                       <Rocket className="w-4 h-4 mr-2" />
                       Avvia ora
                     </Button>
@@ -297,17 +401,33 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
                     </p>
                     <div className="space-y-1.5 max-h-56 overflow-y-auto">
                       {progress.map((p, i) => (
-                        <div key={i} className="flex items-center gap-2 text-sm bg-muted/30 rounded-lg px-3 py-2">
-                          {p.status === "sent"
-                            ? <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                            : <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
-                          <span className="flex-1 truncate">{p.name || `ID ${p.businessId}`}</span>
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 text-sm bg-muted/30 rounded-lg px-3 py-2"
+                        >
+                          {p.status === "sent" ? (
+                            <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+                          )}
+                          <span className="flex-1 truncate">
+                            {p.name || `ID ${p.businessId}`}
+                          </span>
                           {p.landingUrl && (
-                            <a href={p.landingUrl} target="_blank" rel="noopener noreferrer" className="text-[#00d4aa] text-xs hover:underline">
+                            <a
+                              href={p.landingUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#00d4aa] text-xs hover:underline"
+                            >
                               <Globe className="w-3.5 h-3.5" />
                             </a>
                           )}
-                          {p.error && <span className="text-red-400 text-xs truncate max-w-[120px]">{p.error}</span>}
+                          {p.error && (
+                            <span className="text-red-400 text-xs truncate max-w-[120px]">
+                              {p.error}
+                            </span>
+                          )}
                         </div>
                       ))}
                       {isRunning && (
@@ -322,7 +442,9 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
 
                 {summary && (
                   <div className="text-center py-4">
-                    <div className={`text-4xl font-black mb-2 ${summary.failed === 0 ? "text-emerald-500" : "text-yellow-500"}`}>
+                    <div
+                      className={`text-4xl font-black mb-2 ${summary.failed === 0 ? "text-emerald-500" : "text-yellow-500"}`}
+                    >
                       {summary.sent}/{summary.total}
                     </div>
                     <p className="text-muted-foreground text-sm mb-4">
@@ -330,7 +452,12 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
                       {summary.failed > 0 && ` · ${summary.failed} fallite`}
                     </p>
                     {summary.failed > 0 && (
-                      <Button variant="outline" size="sm" onClick={retryFailed} className="mr-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={retryFailed}
+                        className="mr-2"
+                      >
                         Riprova i falliti ({summary.failed})
                       </Button>
                     )}
@@ -349,7 +476,7 @@ export default function CampaignWizard({ open, onClose, selectedBusinesses, onCa
           <div className="flex justify-between mt-6 pt-4 border-t border-border">
             <Button
               variant="ghost"
-              onClick={() => step > 0 ? setStep(step - 1) : onClose()}
+              onClick={() => (step > 0 ? setStep(step - 1) : onClose())}
               disabled={isRunning}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />

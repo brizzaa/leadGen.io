@@ -104,6 +104,9 @@ export default function BusinessDetail() {
   const [status, setStatus] = useState("Da Contattare");
   const [promptType, setPromptType] = useState("social_only");
 
+  const [followUpsEnabled, setFollowUpsEnabled] = useState(false);
+  const [isTogglingFollowUps, setIsTogglingFollowUps] = useState(false);
+
   const fetchBusiness = useCallback(async () => {
     try {
       const res = await authFetch(`${API_URL}/api/businesses/${id}`);
@@ -113,6 +116,7 @@ export default function BusinessDetail() {
         setEditNotes(data.notes || "");
         setEditNextContact(data.next_contact || "");
         setStatus(data.status || "Da Contattare");
+        setFollowUpsEnabled(!!data.follow_ups_enabled);
 
         // Auto-select prompt type based on data
         if (
@@ -397,6 +401,23 @@ export default function BusinessDetail() {
     }
   };
 
+  const handleToggleFollowUps = async () => {
+    setIsTogglingFollowUps(true);
+    try {
+      const res = await authFetch(`${API_URL}/api/businesses/${id}/toggle-followups`, {
+        method: "PATCH",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFollowUpsEnabled(!!data.follow_ups_enabled);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsTogglingFollowUps(false);
+    }
+  };
+
   const handleGenerateWebsite = async () => {
     setIsGeneratingWebsite(true);
     try {
@@ -656,6 +677,9 @@ export default function BusinessDetail() {
           onNextContactChange={setEditNextContact}
           onSave={handleSaveDetails}
           isSaving={isSavingDetails}
+          followUpsEnabled={followUpsEnabled}
+          onToggleFollowUps={handleToggleFollowUps}
+          isTogglingFollowUps={isTogglingFollowUps}
         />
 
         <ActivityTimeline businessId={id} />

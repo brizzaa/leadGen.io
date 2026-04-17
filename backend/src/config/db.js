@@ -3,7 +3,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = join(__dirname, "../../data/businesses.db");
+const DB_PATH = join(__dirname, "../../../data/businesses.db");
 
 let db;
 
@@ -139,6 +139,10 @@ export function getDb() {
     if (!cols.includes("country_code")) {
       db.exec("ALTER TABLE businesses ADD COLUMN country_code TEXT DEFAULT 'IT'");
       console.log("[db] Migration: colonna country_code aggiunta a businesses.");
+    }
+    if (!cols.includes("follow_ups_enabled")) {
+      db.exec("ALTER TABLE businesses ADD COLUMN follow_ups_enabled INTEGER DEFAULT 0");
+      console.log("[db] Migration: colonna follow_ups_enabled aggiunta a businesses.");
     }
 
     // Migration: user_id su campaigns

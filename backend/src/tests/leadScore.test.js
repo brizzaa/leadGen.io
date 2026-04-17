@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeLeadScore } from "../leadScore.js";
+import { computeLeadScore } from "../services/leadScore.js";
 
 describe("computeLeadScore", () => {
   it("restituisce 0 per un business con sito, reclamato, senza contatti", () => {
