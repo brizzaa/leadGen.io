@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ModeToggle } from "@/components/ModeToggle";
+import { ModeToggle } from "@/components/shared/ModeToggle";
 
 const STATUS_COLORS = {
   "Da Contattare": "bg-gray-500/10 text-gray-500 border-gray-500/20",

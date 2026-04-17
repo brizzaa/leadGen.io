@@ -1,4 +1,4 @@
-import { getDb } from "./db.js";
+import { getDb } from "../config/db.js";
 import { generateWebsiteHtml, makeSlug, deployToNetlify } from "./landingPageBuilder.js";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
