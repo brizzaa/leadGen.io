@@ -248,7 +248,8 @@ async function fetchImages(keyword, count = 3) {
     },
     timeout: 10000,
   });
-  const all = (res.data.hits || []).map(h => h.largeImageURL);
+  // webformatURL è hotlinkable; largeImageURL (_1280) risponde 400 come <img src>.
+  const all = (res.data.hits || []).map(h => h.webformatURL || h.previewURL).filter(Boolean);
   for (let i = all.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [all[i], all[j]] = [all[j], all[i]];

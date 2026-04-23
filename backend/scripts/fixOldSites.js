@@ -272,7 +272,8 @@ async function fetchImageCandidates(keywords, maxCandidates = 12) {
           if (candidates.length >= maxCandidates) break;
           if (seen.has(h.id) || USED_IMAGE_IDS.has(h.id)) continue;
           seen.add(h.id);
-          candidates.push({ id: h.id, large: h.largeImageURL, preview: h.previewURL, tags: h.tags, keyword: kw });
+          // webformatURL è l'unico hotlinkable; largeImageURL (_1280) risponde 400 se usato come <img src>.
+          candidates.push({ id: h.id, large: h.webformatURL || h.previewURL, preview: h.previewURL, tags: h.tags, keyword: kw });
         }
       } catch (e) {
         console.warn(`    pixabay "${kw}" page ${page} fail: ${e.message}`);

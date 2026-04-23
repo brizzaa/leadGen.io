@@ -279,7 +279,7 @@ const CATEGORY_IMAGE_KEYWORDS = {
  * Trova keyword dalla categoria E dal nome del business (fallback).
  * Il nome è spesso più informativo della categoria quando quest'ultima è generica ("attività").
  */
-function getCategoryImageKeywords(category, name = "") {
+export function getCategoryImageKeywords(category, name = "") {
   const haystack = `${category || ""} ${name || ""}`.toLowerCase();
   if (haystack.trim()) {
     for (const [key, kws] of Object.entries(CATEGORY_IMAGE_KEYWORDS)) {
@@ -381,7 +381,9 @@ async function fetchRealImageUrls(keywords, count = 6) {
           },
           timeout: 10000,
         });
-        const all = (res.data.hits || []).map(h => h.largeImageURL || h.webformatURL);
+        // webformatURL è l'unico URL hotlinkable di Pixabay (cdn.pixabay.com/photo/...).
+        // largeImageURL (/get/..._1280.jpg) richiede download-flow autenticato e risponde 400 se usato come <img src>.
+        const all = (res.data.hits || []).map(h => h.webformatURL || h.previewURL).filter(Boolean);
         if (all.length >= 2) {
           // Shuffle: evita che 2 business con stessa keyword ricevano stessa sequenza
           for (let i = all.length - 1; i > 0; i--) {
