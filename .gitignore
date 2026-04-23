@@ -44,3 +44,14 @@ privacy.md
 guides.md
 agents.md
 appunti.md
+
+# Auth sessions (live cookies/tokens)
+**/fb-session.json
+**/ig-session.json
+**/*-session.json
+
+# User uploads
+uploads/
+
+# Local notes
+backend/TODO.md

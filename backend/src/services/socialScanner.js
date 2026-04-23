@@ -1,6 +1,13 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { chromium } from "playwright";
+import { readFileSync, existsSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+const IG_SESSION_FILE = join(ROOT, "../../ig-session.json");
+const FB_SESSION_FILE = join(ROOT, "../../fb-session.json");
 
 /** Random delay to appear human */
 function randomDelay(min = 2000, max = 5000) {
@@ -271,6 +278,214 @@ async function searchSocialViaDDG(name, area) {
   } finally {
     await browser.close();
   }
+}
+
+// ============================================================
+// CONTACT EXTRACTION HELPERS
+// ============================================================
+
+const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+const PHONE_RE = /(?:\+39\s?)?(?:0\d{1,4}[\s\-]?\d{4,8}|3\d{2}[\s\-]?\d{6,7})/g;
+const EMAIL_BLACKLIST = ["example.com", "sentry.io", "instagram.com", "facebook.com", "google.com", "apple.com", "w3.org", "schema.org", "duckduckgo.com", "wixpress.com", "squarespace.com", "wordpress.com", "wix.com", "amazonaws.com", "cloudflare.com"];
+
+function filterEmails(matches) {
+  return (matches || []).filter(e => !EMAIL_BLACKLIST.some(b => e.toLowerCase().includes(b)));
+}
+
+function filterPhones(matches) {
+  return (matches || []).filter(p => p.replace(/\D/g, "").length >= 9);
+}
+
+/**
+ * Estrae email, telefono, IG, FB da un sito web.
+ * Integra il vecchio extractSocialsFromWebsite aggiungendo email/tel.
+ */
+export async function extractContactsFromWebsite(websiteUrl) {
+  if (!websiteUrl) return {};
+  const lower = websiteUrl.toLowerCase();
+  if (lower.includes("facebook.com") || lower.includes("instagram.com")) return {};
+  try {
+    let url = websiteUrl.startsWith("http") ? websiteUrl : "https://" + websiteUrl;
+    const response = await axios.get(url, {
+      timeout: 10000,
+      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/121.0.0.0 Safari/537.36" },
+      maxRedirects: 5,
+    });
+    const $ = cheerio.load(response.data);
+    const result = {};
+
+    $("a[href]").each((_, el) => {
+      const href = $(el).attr("href") || "";
+      const h = href.toLowerCase();
+      if (!result.facebook_url && h.includes("facebook.com") && !h.includes("/sharer") && !h.includes("/dialog") && h !== "https://www.facebook.com/") result.facebook_url = href.split("?")[0];
+      if (!result.instagram_url && h.includes("instagram.com") && !h.includes("/share") && h !== "https://www.instagram.com/") result.instagram_url = href.split("?")[0];
+      if (!result.email && h.startsWith("mailto:")) result.email = href.replace("mailto:", "").split("?")[0].trim().toLowerCase();
+      if (!result.phone && h.startsWith("tel:")) result.phone = href.replace("tel:", "").trim();
+    });
+
+    // Fallback: cerca email nel testo del body
+    if (!result.email) {
+      const bodyText = $("body").text();
+      const emails = filterEmails(bodyText.match(EMAIL_RE));
+      if (emails[0]) result.email = emails[0].toLowerCase();
+    }
+    if (!result.phone) {
+      const bodyText = $("body").text();
+      const phones = filterPhones(bodyText.match(PHONE_RE));
+      if (phones[0]) result.phone = phones[0].trim();
+    }
+
+    return result;
+  } catch { return {}; }
+}
+
+/**
+ * Estrae email e telefono da una pagina Facebook.
+ * - Se fb-session.json esiste: usa Playwright con sessione loggata (accesso alla sezione Info)
+ * - Altrimenti: HTTP puro su m.facebook.com (solo pagine pubbliche)
+ * Per generare fb-session.json: node scripts/facebookLogin.js
+ */
+export async function extractContactsFromFacebook(fbUrl) {
+  if (!fbUrl) return {};
+  try {
+    if (existsSync(FB_SESSION_FILE)) {
+      const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
+      const context = await browser.newContext({ storageState: FB_SESSION_FILE, locale: "it-IT" });
+      const page = await context.newPage();
+      try {
+        // Vai alla tab "Info" della pagina FB (sezione contatti)
+        const infoUrl = fbUrl.replace(/\/$/, "") + "/about";
+        await page.goto(infoUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
+        await page.waitForTimeout(2000);
+        const text = await page.locator("body").innerText().catch(() => "");
+        const result = {};
+        const emails = filterEmails(text.match(EMAIL_RE));
+        if (emails[0]) result.email = emails[0].toLowerCase();
+        const phones = filterPhones(text.match(PHONE_RE));
+        if (phones[0]) result.phone = phones[0].trim();
+        return result;
+      } finally { await browser.close(); }
+    }
+
+    // Fallback HTTP puro (solo pagine pubbliche non protette da login)
+    const mUrl = fbUrl.replace(/^https?:\/\/(www\.)?/, "https://m.facebook.com/").replace("m.facebook.com/m.facebook.com", "m.facebook.com");
+    const response = await axios.get(mUrl, {
+      timeout: 12000,
+      headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1" },
+      maxRedirects: 5,
+    });
+    const $ = cheerio.load(response.data);
+    const result = {};
+    $("a[href]").each((_, el) => {
+      const href = $(el).attr("href") || "";
+      const h = href.toLowerCase();
+      if (!result.email && h.startsWith("mailto:")) result.email = href.replace("mailto:", "").split("?")[0].trim().toLowerCase();
+      if (!result.phone && h.startsWith("tel:")) result.phone = href.replace("tel:", "").trim();
+    });
+    if (!result.email) {
+      const emails = filterEmails($("body").text().match(EMAIL_RE));
+      if (emails[0]) result.email = emails[0].toLowerCase();
+    }
+    if (!result.phone) {
+      const phones = filterPhones($("body").text().match(PHONE_RE));
+      if (phones[0]) result.phone = phones[0].trim();
+    }
+    return result;
+  } catch { return {}; }
+}
+
+/**
+ * Estrae email e telefono dalla bio Instagram.
+ * - Se ig-session.json esiste: usa instagram-private-api (no browser, veloce)
+ * - Altrimenti: fallback DDG snippet (limitato)
+ * Per generare ig-session.json: node scripts/instagramLogin.js
+ */
+export async function extractContactsFromInstagram(igUrl) {
+  if (!igUrl) return {};
+  try {
+    const username = igUrl.replace(/\/$/, "").split("/").pop();
+    if (!username) return {};
+
+    if (existsSync(IG_SESSION_FILE)) {
+      const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
+      const context = await browser.newContext({ storageState: IG_SESSION_FILE, locale: "it-IT" });
+      const page = await context.newPage();
+      try {
+        await page.goto(igUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
+        await page.waitForTimeout(2500);
+        // Prendi tutto il testo della pagina — bio è in mezzo al body text
+        const bio = await page.evaluate(() => {
+          // Skip se profilo non disponibile
+          if (document.body.innerText.includes("non è disponibile")) return "";
+          return document.body.innerText.slice(0, 3000);
+        });
+        const result = {};
+        const emails = filterEmails(bio.match(EMAIL_RE));
+        if (emails[0]) result.email = emails[0].toLowerCase();
+        const phones = filterPhones(bio.match(PHONE_RE));
+        if (phones[0]) result.phone = phones[0].trim();
+        return result;
+      } finally { await browser.close(); }
+    }
+
+    // Fallback: DDG snippet (limitato, spesso vuoto)
+    const query = `site:instagram.com "${username}" email`;
+    const res = await axios.get(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+      timeout: 10000,
+      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/121.0.0.0 Safari/537.36" },
+    });
+    const $ = cheerio.load(res.data);
+    const emails = filterEmails($("body").text().match(EMAIL_RE));
+    return emails[0] ? { email: emails[0].toLowerCase() } : {};
+  } catch { return {}; }
+}
+
+/**
+ * Cerca email di un business via html.duckduckgo.com (puro HTTP, no browser).
+ */
+export async function searchEmailViaDDG(name, area) {
+  try {
+    const query = `"${name}" ${area || ""} email contatti`;
+    const res = await axios.get(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+      timeout: 10000,
+      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/121.0.0.0 Safari/537.36" },
+    });
+    const $ = cheerio.load(res.data);
+    // Cerca email negli snippet dei risultati
+    const snippets = $(".result__snippet, .result__body").map((_, el) => $(el).text()).get().join(" ");
+    const emails = filterEmails(snippets.match(EMAIL_RE));
+    return emails[0]?.toLowerCase() || null;
+  } catch { return null; }
+}
+
+/**
+ * Cerca profili IG/FB via html.duckduckgo.com (puro HTTP, no browser).
+ * Rimpiazza searchSocialViaDDG per l'enrichment veloce nella campagna.
+ */
+export async function searchSocialsViaDDGHttp(name, area) {
+  try {
+    const query = `"${name}" ${area || ""} facebook instagram`;
+    const res = await axios.get(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+      timeout: 10000,
+      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/121.0.0.0 Safari/537.36" },
+    });
+    const $ = cheerio.load(res.data);
+    const result = { facebook_url: null, instagram_url: null };
+    const blocked = ["/login", "/help", "/explore", "/sharer", "/share?", "/dialog", "facebook.com/tr?"];
+    const rootFb = ["https://www.facebook.com/", "https://facebook.com/"];
+    const rootIg = ["https://www.instagram.com/", "https://instagram.com/"];
+
+    $("a.result__a, a.result__url").each((_, el) => {
+      let href = $(el).attr("href") || "";
+      // DDG wraps links — estrai uddg param se presente
+      try { const u = new URL(href); const uddg = u.searchParams.get("uddg"); if (uddg) href = decodeURIComponent(uddg); } catch {}
+      const h = href.toLowerCase();
+      if (blocked.some(b => h.includes(b))) return;
+      if (!result.facebook_url && h.includes("facebook.com") && !rootFb.includes(h)) result.facebook_url = href.split("?")[0];
+      if (!result.instagram_url && h.includes("instagram.com") && !rootIg.includes(h)) result.instagram_url = href.split("?")[0];
+    });
+    return result;
+  } catch { return { facebook_url: null, instagram_url: null }; }
 }
 
 // ============================================================

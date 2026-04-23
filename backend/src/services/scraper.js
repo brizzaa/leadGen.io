@@ -4,18 +4,10 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import axios from "axios";
-import * as cheerio from "cheerio";
-import pLimit from "p-limit";
 
 const GOSOM_BIN = join(process.env.HOME, "go/bin/google-maps-scraper");
+const STREAM_POLL_MS = 10_000; // leggi nuove righe ogni 10s
 
-// Rate-limit-safe delays
-function randomDelay(min = 2000, max = 4000) {
-  const ms = Math.floor(Math.random() * (max - min + 1)) + min;
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Geocode city name → {lat, lon} via Nominatim (1 req/s limit — called once per search)
 async function geocodeCity(area) {
   try {
     const res = await axios.get("https://nominatim.openstreetmap.org/search", {
@@ -24,165 +16,102 @@ async function geocodeCity(area) {
       timeout: 8000,
     });
     if (res.data?.length > 0) {
-      return { lat: parseFloat(res.data[0].lat), lon: parseFloat(res.data[0].lon) };
+      const r = res.data[0];
+      return { lat: parseFloat(r.lat), lon: parseFloat(r.lon) };
     }
-  } catch { /* fallback: no geo */ }
+  } catch { /* fallback */ }
   return null;
 }
 
-async function scrapeContactsFromWebsite(websiteUrl) {
-  if (!websiteUrl) return { email: null, phone: null };
-  const lower = websiteUrl.toLowerCase();
-  if (
-    lower.includes("facebook.com") || lower.includes("instagram.com") ||
-    lower.includes("tripadvisor.") || lower.includes("paginegialle.") || lower.includes("yelp.")
-  ) {
-    return { email: null, phone: null };
-  }
+function getProxies() {
+  const raw = process.env.GOSOM_PROXIES;
+  return raw ? raw.split(",").map((p) => p.trim()).filter(Boolean) : [];
+}
 
+function parseLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("{")) return null;
   try {
-    let url = websiteUrl;
-    if (!url.startsWith("http")) url = "https://" + url;
-
-    const response = await axios.get(url, {
-      timeout: 10000,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-      },
-      maxRedirects: 5,
-    });
-
-    const $ = cheerio.load(response.data);
-    $("script, style, noscript").remove();
-    const text = $("body").text();
-
-    let email = null;
-    $('a[href^="mailto:"]').each((_, el) => {
-      if (!email) {
-        const addr = $(el).attr("href").replace("mailto:", "").split("?")[0].trim().toLowerCase();
-        if (addr && addr.includes("@") && !addr.includes("@example.") && !addr.includes("@sentry.")) {
-          email = addr;
-        }
-      }
-    });
-    if (!email) {
-      const matches = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
-      for (const m of matches) {
-        const low = m.toLowerCase();
-        if (!low.includes("@example.") && !low.includes("@sentry.") && !low.includes("@wixpress.") && !low.includes(".png") && !low.includes(".jpg") && !low.endsWith(".js")) {
-          email = low;
-          break;
-        }
-      }
-    }
-
-    let phone = null;
-    $('a[href^="tel:"]').each((_, el) => {
-      if (!phone) phone = $(el).attr("href").replace("tel:", "").trim();
-    });
-    if (!phone) {
-      const matches = text.match(/(?:\+39\s?)?(?:0\d{1,4}[\s.-]?\d{4,8}|3[0-9]{2}[\s.-]?\d{6,7})/g) || [];
-      for (const m of matches) {
-        const digits = m.replace(/\D/g, "");
-        if (digits.length >= 8 && digits.length <= 13) { phone = m.trim(); break; }
-      }
-    }
-
-    return { email, phone };
-  } catch {
-    return { email: null, phone: null };
-  }
+    const d = JSON.parse(trimmed);
+    if (!d.title) return null;
+    const email = Array.isArray(d.emails) && d.emails.length > 0 ? d.emails[0] : null;
+    return {
+      name: d.title ?? null,
+      address: d.address ?? null,
+      phone: d.phone ?? null,
+      website: d.web_site || null,
+      rating: d.review_rating ?? null,
+      review_count: d.review_count ?? null,
+      email,
+      maps_url: d.link ?? null,
+      is_claimed: true,
+      facebook_url: null,
+      instagram_url: null,
+      social_last_active: null,
+      latitude: d.latitude ?? null,
+      longitude: d.longtitude ?? null, // gosom typo
+    };
+  } catch { return null; }
 }
 
-const DEEP_SCAN_SKIP_DOMAINS = [
-  "tripadvisor.", "paginegialle.", "google.", "thefork.", "yelp.",
-  "booking.", "trustpilot.", "virgilio.", "tuttocittà.", "misterimpact.",
-  "infobel.", "hotfrog.",
-];
-
-// Deep scan via DuckDuckGo HTML (no JS needed — axios only, no Playwright)
-// Sequential with random delays to respect DDG rate limits
-async function deepScanWithDDG(businesses, signal, onProgress) {
-  for (let i = 0; i < businesses.length; i++) {
-    if (signal.aborted) break;
-    const b = businesses[i];
-    try {
-      // Random delay 2-4s between DDG requests to avoid rate limiting
-      if (i > 0) await randomDelay(2000, 4000);
-
-      const res = await axios.get("https://html.duckduckgo.com/html/", {
-        params: { q: `${b.name} ${b.area}` },
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-          "Accept": "text/html",
-        },
-        timeout: 8000,
-      });
-
-      const $ = cheerio.load(res.data);
-      let foundUrl = null;
-
-      $("a.result__url, .result__url").each((_, el) => {
-        if (foundUrl) return;
-        const href = $(el).attr("href") || $(el).text();
-        if (!href) return;
-        const lower = href.toLowerCase();
-        if (DEEP_SCAN_SKIP_DOMAINS.some((d) => lower.includes(d))) return;
-
-        // Extract real URL from DDG redirect
-        try {
-          const u = new URL(href);
-          if (u.hostname.includes("duckduckgo.com")) {
-            const uddg = u.searchParams.get("uddg");
-            if (uddg) { foundUrl = decodeURIComponent(uddg); return; }
-          }
-        } catch { /* skip */ }
-        foundUrl = href;
-      });
-
-      if (foundUrl) {
-        b.website = foundUrl;
-        onProgress(`✨ [Deep Scan] ${b.name} → ${b.website}`);
-      } else {
-        onProgress(`🔍 [Deep Scan] ${b.name} → nessun risultato`);
-      }
-    } catch (err) {
-      // DDG rate limit (429) or timeout — back off longer
-      if (err.response?.status === 429) {
-        onProgress(`⏳ [Deep Scan] Rate limit DDG — attendo 10s...`);
-        await randomDelay(10000, 15000);
-      }
-    }
-  }
-}
-
-function runGosom(queryFile, outputFile, onProgress, signal, geo) {
+/**
+ * Esegue gosom e chiama onBatch() ogni STREAM_POLL_MS con i nuovi business trovati.
+ * Permette l'inserimento nel DB in streaming invece di aspettare la fine.
+ */
+function runGosom(queryFile, outputFile, { onProgress, onBatch, signal, geo, gridMode = false, bbox = null, gridCell = 1 }) {
   return new Promise((resolve, reject) => {
     const args = [
       "-input", queryFile,
       "-results", outputFile,
       "-json",
-      "-depth", "10",
+      "-depth", gridMode ? "3" : "10", // grid: depth basso, ogni cella è piccola
       "-c", "2",
       "-lang", "it",
       "-email",
     ];
 
-    if (geo) {
+    if (gridMode && bbox) {
+      args.push("-grid-bbox", `${bbox.minLat},${bbox.minLon},${bbox.maxLat},${bbox.maxLon}`);
+      args.push("-grid-cell", String(gridCell));
+    } else if (geo) {
       args.push("-geo", `${geo.lat},${geo.lon}`);
       args.push("-radius", "15000");
     }
 
+    const proxies = getProxies();
+    if (proxies.length > 0) args.push("-proxies", proxies.join(","));
+
     const proc = spawn(GOSOM_BIN, args, { stdio: ["ignore", "ignore", "pipe"] });
+
+    let totalFound = 0;
+    let queriesDone = 0;
+    let linesRead = 0; // quante righe del file abbiamo già processato
+
+    // Polling: legge le righe nuove scritte da gosom nel file di output
+    const pollInterval = setInterval(() => {
+      if (!existsSync(outputFile)) return;
+      try {
+        const allLines = readFileSync(outputFile, "utf8").split("\n");
+        const newLines = allLines.slice(linesRead);
+        linesRead = allLines.length;
+
+        const batch = newLines.map(parseLine).filter(Boolean);
+        if (batch.length > 0) onBatch(batch);
+      } catch { /* file ancora in scrittura, skip */ }
+    }, STREAM_POLL_MS);
 
     proc.stderr.on("data", (data) => {
       const lines = data.toString().split("\n").filter(Boolean);
       for (const line of lines) {
         if (line.includes("places found")) {
           const match = line.match(/(\d+) places found/);
-          if (match) onProgress(`📍 ${match[1]} business trovati, estraggo dettagli...`);
+          if (match) {
+            totalFound += parseInt(match[1], 10);
+            onProgress(`📍 ${totalFound} trovati finora...`);
+          }
         } else if (line.includes("job finished")) {
-          onProgress("✅ Scraping Google Maps completato.");
+          queriesDone++;
+          onProgress(`✅ Query ${queriesDone} completata — ${totalFound} trovati`);
         } else if (line.includes("ERROR") || line.includes("error")) {
           onProgress(`⚠️ ${line.trim()}`);
         }
@@ -195,6 +124,17 @@ function runGosom(queryFile, outputFile, onProgress, signal, geo) {
 
     proc.on("close", (code) => {
       clearInterval(checkAbort);
+      clearInterval(pollInterval);
+
+      // Flush finale: legge le righe rimaste dopo l'ultimo poll
+      if (existsSync(outputFile)) {
+        try {
+          const allLines = readFileSync(outputFile, "utf8").split("\n");
+          const remaining = allLines.slice(linesRead).map(parseLine).filter(Boolean);
+          if (remaining.length > 0) onBatch(remaining);
+        } catch { /* skip */ }
+      }
+
       if (signal.aborted) return resolve();
       if (code !== 0 && code !== null) reject(new Error(`gosom exited with code ${code}`));
       else resolve();
@@ -204,35 +144,14 @@ function runGosom(queryFile, outputFile, onProgress, signal, geo) {
   });
 }
 
-function parseGosomOutput(outputFile) {
-  if (!existsSync(outputFile)) return [];
-  const results = [];
-  for (const line of readFileSync(outputFile, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("{")) continue;
-    try {
-      const d = JSON.parse(trimmed);
-      if (!d.title) continue;
-      const email = Array.isArray(d.emails) && d.emails.length > 0 ? d.emails[0] : null;
-      results.push({
-        name: d.title ?? null,
-        address: d.address ?? null,
-        phone: d.phone ?? null,
-        website: d.web_site ?? null,
-        rating: d.review_rating ?? null,
-        review_count: d.review_count ?? null,
-        email,
-        maps_url: d.link ?? null,
-        is_claimed: true,
-        facebook_url: null,
-        instagram_url: null,
-        social_last_active: null,
-        latitude: d.latitude ?? null,
-        longitude: d.longtitude ?? null, // gosom typo
-      });
-    } catch { /* skip malformed */ }
-  }
-  return results;
+// Calcola bbox quadrata intorno a un punto dato raggio in km
+function cityBbox(lat, lon, radiusKm) {
+  const dLat = radiusKm / 111;
+  const dLon = radiusKm / (111 * Math.cos(lat * Math.PI / 180));
+  return {
+    minLat: lat - dLat, maxLat: lat + dLat,
+    minLon: lon - dLon, maxLon: lon + dLon,
+  };
 }
 
 export async function scrapeBusinesses(
@@ -240,86 +159,88 @@ export async function scrapeBusinesses(
   category,
   onProgress = () => {},
   signal = { aborted: false },
-  existingNames = [],
+  onBatch = () => {},
 ) {
-  const query = `${category} ${area}`;
-  onProgress(`🔍 Avvio ricerca: "${query}"`);
+  const ALL_CATEGORIES = [
+    // cibo & bevande
+    "ristorante","pizzeria","bar","trattoria","osteria","enoteca","gelateria",
+    "piadineria","rosticceria","kebab","sushi","gastronomia","macelleria",
+    "pescheria","fruttivendolo","caffetteria","wine bar","birrificio","cantina",
+    "pasticceria","panificio","bakery","fast food",
+    // salute & benessere
+    "dentista","medico","farmacia","fisioterapista","psicologo","veterinario",
+    "laboratorio analisi","nutrizionista","pediatra","cardiologo","ortopedico",
+    "dermatologo","ginecologo","oculista","logopedista","clinica","ambulatorio",
+    "centro medico","studio medico",
+    // estetica & wellness
+    "parrucchiere","centro estetico","palestra","barbiere","spa","centro massaggi",
+    "nail salon","solarium","centro benessere","yoga","pilates","crossfit",
+    "arti marziali","danza","piscina",
+    // automotive
+    "meccanico","carrozzeria","gommista","autolavaggio","officina","elettrauto",
+    "concessionaria auto","autonoleggio","stazione di servizio",
+    // servizi professionali
+    "studio legale","commercialista","notaio","architetto","geometra",
+    "agenzia immobiliare","assicurazioni","agenzia di viaggio","consulente del lavoro",
+    "studio fotografico","agenzia pubblicitaria","web agency","banca","consulenza informatica",
+    // casa & artigianato
+    "idraulico","elettricista","falegname","imbianchino","giardiniere","muratore",
+    "fabbro","impresa di pulizie","traslochi","serramentista","tappezziere",
+    "arredamento","cucine","infissi","pavimenti","ceramiche","tende",
+    // retail
+    "hotel","negozio abbigliamento","supermercato","tabaccheria","gioielleria",
+    "ottico","libreria","cartoleria","ferramenta","elettronica","calzature",
+    "profumeria","casalinghi","elettrodomestici","mobili","pet shop","fiori",
+    "sport","informatica","telefonia","abbigliamento bambini","orologeria",
+    "antiquariato","merceria","cosmetica","illuminazione","bricolage","edicola",
+    // formazione & intrattenimento
+    "scuola guida","scuola di lingue","musica","scuola di cucina",
+    "campo da tennis","circolo sportivo","bowling","maneggio","cinema","teatro",
+    // altri servizi
+    "bed and breakfast","agriturismo","affittacamere",
+    "lavanderia","sartoria","calzolaio","riparazione telefoni","centro stampa",
+    "tipografia","pompe funebri","noleggio","toelettatura cani",
+    "fotografo","parafarmacia","erboristeria","ottica","centro scommesse",
+  ];
 
-  // Geo targeting — Nominatim (1 call, max 1 req/s — fine)
+  const isGridScan = category === "__grid__";
+  const isAll = category === "attività" || category === "__all__";
+
   onProgress("🌍 Risoluzione coordinate...");
   const geo = await geocodeCity(area);
-  if (geo) {
-    onProgress(`📌 Coordinate: ${geo.lat.toFixed(4)}, ${geo.lon.toFixed(4)}`);
-  }
+  if (geo) onProgress(`📌 Coordinate: ${geo.lat.toFixed(4)}, ${geo.lon.toFixed(4)}`);
 
   const id = randomUUID();
   const queryFile = join(tmpdir(), `gosom-query-${id}.txt`);
   const outputFile = join(tmpdir(), `gosom-out-${id}.json`);
 
+  let gosomOpts = { onProgress, onBatch, signal, geo };
+
   try {
-    writeFileSync(queryFile, query + "\n", "utf8");
-
-    onProgress("🤖 Avvio gosom scraper...");
-    await runGosom(queryFile, outputFile, onProgress, signal, geo);
-
-    if (signal.aborted) {
-      onProgress("🛑 Scraping interrotto dall'utente.");
-      return [];
+    if (isGridScan) {
+      // Scan completo: griglia da 250m su 10km di raggio → massima copertura
+      if (!geo) throw new Error("Impossibile geolocalizzare l'area per lo scan completo.");
+      const CELL_KM = 0.25;
+      const RADIUS_KM = 10;
+      const bbox = cityBbox(geo.lat, geo.lon, RADIUS_KM);
+      const cellCount = Math.ceil((bbox.maxLat - bbox.minLat) / (CELL_KM / 111)) *
+                        Math.ceil((bbox.maxLon - bbox.minLon) / (CELL_KM / (111 * Math.cos(geo.lat * Math.PI / 180))));
+      onProgress(`🗺️ Scan completo — griglia ${cellCount} celle da 250m su ${RADIUS_KM}km di raggio`);
+      onProgress(`⏱️ Stima: ${Math.ceil(cellCount * 3 / 60)} min (2 worker, ~3s/cella)`);
+      writeFileSync(queryFile, "attività\n", "utf8");
+      gosomOpts = { ...gosomOpts, gridMode: true, bbox, gridCell: CELL_KM };
+    } else {
+      const queries = isAll
+        ? ALL_CATEGORIES.map((c) => `${c} ${area}`)
+        : [`${category} ${area}`];
+      onProgress(`🔍 ${isAll ? `${queries.length} categorie` : `"${queries[0]}"`} in ${area}`);
+      writeFileSync(queryFile, queries.join("\n") + "\n", "utf8");
     }
 
-    const businesses = parseGosomOutput(outputFile);
-    onProgress(`📊 Trovati ${businesses.length} business da gosom.`);
+    onProgress("🤖 Avvio gosom — inserimento in streaming ogni 10s...");
+    await runGosom(queryFile, outputFile, gosomOpts);
 
-    // Filtra duplicati già nel DB
-    const filtered = businesses.filter((b) => !existingNames.includes(b.name));
-    const skipped = businesses.length - filtered.length;
-    if (skipped > 0) onProgress(`⏭️ ${skipped} già presenti nel DB, saltati.`);
-
-    for (const b of filtered) { b.category = category; b.area = area; }
-
-    // =========================================================
-    // DEEP SCAN — trova sito per chi non ce l'ha (axios+DDG, no browser)
-    // Sequential con delays 2-4s per rispettare rate limit DDG
-    // =========================================================
-    const noSite = filtered.filter((b) => !b.website);
-    if (noSite.length > 0 && !signal.aborted) {
-      onProgress(`🔎 Deep Scan — cerco sito per ${noSite.length} attività (axios, no browser)...`);
-      await deepScanWithDDG(noSite, signal, onProgress);
-    }
-
-    // =========================================================
-    // CONTACT SCRAPE — parallelo con concurrency 3
-    // Ognuno visita un dominio diverso → nessun rate limit per sito singolo
-    // Salta se gosom ha già trovato email E phone è già presente
-    // =========================================================
-    const needsContacts = filtered.filter((b) => b.website && (!b.email || !b.phone));
-    if (needsContacts.length > 0 && !signal.aborted) {
-      onProgress(`📧 Contact Scrape — ${needsContacts.length} attività (concurrency: 3)...`);
-      const limit = pLimit(3);
-      let done = 0;
-
-      await Promise.allSettled(
-        needsContacts.map((b) =>
-          limit(async () => {
-            if (signal.aborted) return;
-            try {
-              const contacts = await scrapeContactsFromWebsite(b.website);
-              const found = [];
-              if (contacts.email && !b.email) { b.email = contacts.email; found.push(`email: ${contacts.email}`); }
-              if (contacts.phone && !b.phone) { b.phone = contacts.phone; found.push(`tel: ${contacts.phone}`); }
-              done++;
-              if (found.length > 0) {
-                onProgress(`📧 [${done}/${needsContacts.length}] ${b.name} → ${found.join(", ")}`);
-              }
-            } catch { /* skip */ }
-          })
-        )
-      );
-    }
-
-    onProgress(`✅ Estrazione completata: ${filtered.length} business trovati.`);
-    return filtered;
-
+    if (signal.aborted) onProgress("🛑 Scraping interrotto dall'utente.");
   } finally {
     try { unlinkSync(queryFile); } catch { /* skip */ }
     try { unlinkSync(outputFile); } catch { /* skip */ }

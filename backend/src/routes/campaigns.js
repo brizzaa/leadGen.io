@@ -1,8 +1,9 @@
 import express from "express";
 import axios from "axios";
-import nodemailer from "nodemailer";
+import pLimit from "p-limit";
 import { getDb } from "../config/db.js";
-import { makeSlug, deployToNetlify, generateWebsiteHtml } from "../services/landingPageBuilder.js";
+import { makeSlug, deployToNetlify, generateWebsiteHtml, captureScreenshot } from "../services/landingPageBuilder.js";
+import { sendOutreachEmail } from "../services/mailer.js";
 
 const router = express.Router();
 
@@ -79,15 +80,15 @@ router.get("/:id/progress", (req, res) => {
   }
 });
 
-// Pipeline asincrona
+// Pipeline asincrona — 3 lead in parallelo (rate-limit-safe per Gemini 15 RPM)
 async function runCampaign(campaignId, businessIds) {
   const db = getDb();
   let sent = 0;
   let failed = 0;
+  const limit = pLimit(1);
 
-  for (const businessId of businessIds) {
+  const processLead = async (businessId) => {
     let landingUrl = null;
-    let error = null;
 
     try {
       const biz = db.prepare("SELECT * FROM businesses WHERE id = ?").get(businessId);
@@ -97,19 +98,32 @@ async function runCampaign(campaignId, businessIds) {
         throw new Error("Nessun indirizzo email");
       }
 
-      // Step 1: genera sito con Gemini AI
-      const { html } = await generateWebsiteHtml(biz);
+      const slug = makeSlug(biz.name);
+
+      // Step 1: genera sito con Gemini AI (+ scrape context dal loro sito)
+      const { html } = await generateWebsiteHtml(biz, "auto", "gemini_flash");
 
       // Step 2: pubblica su Netlify
-      landingUrl = await deployToNetlify(html, makeSlug(biz.name));
+      landingUrl = await deployToNetlify(html, slug);
 
-      // Step 3: genera email personalizzata con Gemini
+      // Step 3: screenshot dal URL live (rendering fedele: Tailwind CDN + fonts caricati)
+      const screenshotPath = await captureScreenshot({ url: landingUrl, slug });
+
+      // Step 4: genera email personalizzata con Gemini
       const emailContent = await generateEmail(biz, landingUrl);
 
-      // Step 4: invia email
-      await sendEmail(biz.email, emailContent.subject, emailContent.body);
+      // Step 5: invia email con template Spotlight + screenshot CID + tracking
+      await sendOutreachEmail({
+        businessId,
+        toEmail: biz.email,
+        subject: emailContent.subject,
+        body: emailContent.body,
+        businessName: biz.name,
+        websiteUrl: landingUrl,
+        screenshotPath,
+      });
 
-      // Step 5: aggiorna DB
+      // Step 6: aggiorna DB
       db.prepare("UPDATE businesses SET status = 'Inviata Mail' WHERE id = ?").run(businessId);
       db.prepare("UPDATE campaign_results SET status = 'sent', landing_url = ? WHERE campaign_id = ? AND business_id = ?")
         .run(landingUrl, campaignId, businessId);
@@ -119,13 +133,15 @@ async function runCampaign(campaignId, businessIds) {
 
     } catch (e) {
       failed++;
-      error = e.message;
+      const error = e.message;
       console.error(`[campaign ${campaignId}] Business ${businessId} failed:`, e.message);
       db.prepare("UPDATE campaign_results SET status = 'failed', error = ? WHERE campaign_id = ? AND business_id = ?")
         .run(error, campaignId, businessId);
       sendSSE(campaignId, "progress", { businessId, name: null, status: "failed", landingUrl: null, error });
     }
-  }
+  };
+
+  await Promise.all(businessIds.map((id) => limit(() => processLead(id))));
 
   const finalStatus = failed === 0 ? "completed" : "partial";
   db.prepare("UPDATE campaigns SET status = ?, sent = ?, failed = ? WHERE id = ?")
@@ -153,42 +169,23 @@ async function generateEmail(biz, siteUrl) {
 Hai creato una demo gratuita del loro sito: ${siteUrl}
 
 L'email deve:
-- Essere in italiano, tono professionale ma diretto
-- Menzionare che hai già preparato una demo del sito (link: ${siteUrl})
-- Proporre una chiamata per discutere
-- Includere questa frase testualmente: "${contactLine}"
-- Essere max 150 parole
-- Firmare con il nome "${myName}"
-- Includere footer GDPR: "Ti contatto perché ho trovato i tuoi riferimenti pubblici online (Legittimo Interesse, Art. 6 GDPR). Rispondi STOP per non ricevere altre comunicazioni."
+- Essere in italiano, tono diretto e umano, non commerciale
+- Iniziare con "Buongiorno,"
+- Menzionare la demo con il link: ${siteUrl}
+- Proporre di sentirsi entro 24h
+- Includere: "${contactLine}"
+- Max 120 parole, testo semplice con newline (nessun tag HTML)
+- Firmare come "${myName}"
 
-Rispondi SOLO con JSON: {"subject": "...", "body": "HTML con <p> tags"}`;
+Rispondi SOLO con JSON: {"subject": "...", "body": "..."}`;
 
   const response = await axios.post(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiApiKey}`,
-    {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.7, responseMimeType: "application/json" },
-    },
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+    { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7, responseMimeType: "application/json" } },
     { headers: { "Content-Type": "application/json" }, timeout: 30000 }
   );
 
   return JSON.parse(response.data.candidates[0].content.parts[0].text);
-}
-
-async function sendEmail(toEmail, subject, htmlBody) {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    throw new Error("Credenziali email non configurate");
-  }
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-  });
-  await transporter.sendMail({
-    from: process.env.EMAIL_USER,
-    to: toEmail,
-    subject: subject || "Proposta di collaborazione",
-    html: htmlBody,
-  });
 }
 
 export default router;

@@ -48,6 +48,32 @@ router.get("/:token", (req, res) => {
   res.end(PIXEL);
 });
 
+// GET/POST /api/track/unsubscribe/:token — user clicks unsubscribe link
+router.all("/unsubscribe/:token", (req, res) => {
+  const { token } = req.params;
+  try {
+    const db = getDb();
+    const row = db
+      .prepare("SELECT business_id FROM email_tracking WHERE token = ?")
+      .get(token);
+
+    if (row) {
+      db.prepare("UPDATE businesses SET is_blacklisted = 1, follow_ups_enabled = 0 WHERE id = ?")
+        .run(row.business_id);
+      const biz = db.prepare("SELECT name FROM businesses WHERE id = ?").get(row.business_id);
+      if (biz) {
+        db.prepare("INSERT INTO activity_logs (business_id, type, message) VALUES (?, ?, ?)")
+          .run(row.business_id, "unsubscribed", `${biz.name} ha richiesto l'annullamento dell'iscrizione`);
+      }
+    }
+  } catch (e) {
+    console.error("[tracking] Unsubscribe error:", e.message);
+  }
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><title>Iscrizione annullata</title><style>body{font-family:-apple-system,sans-serif;max-width:520px;margin:80px auto;padding:0 20px;color:#111;text-align:center}h1{font-size:28px;margin:0 0 16px}p{color:#555;line-height:1.6}</style></head><body><h1>Iscrizione annullata</h1><p>Non riceverai più email da noi.<br>Grazie per averci contattato.</p></body></html>`);
+});
+
 // GET /api/track/stats/:businessId — statistiche apertura per un business
 router.get("/stats/:businessId", (req, res) => {
   const db = getDb();

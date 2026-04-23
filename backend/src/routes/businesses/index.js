@@ -5,6 +5,7 @@ import emailRouter from "./email.js";
 import followUpsRouter from "./followUps.js";
 import contactsRouter from "./contacts.js";
 import statusRouter from "./status.js";
+import enrichRouter from "./enrich.js";
 import crudRouter from "./crud.js";
 
 /**
@@ -18,6 +19,7 @@ router.use(emailRouter);
 router.use(followUpsRouter);
 router.use(contactsRouter);
 router.use(statusRouter);
+router.use(enrichRouter);
 router.use(crudRouter);
 
 export default router;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Building2,
   CheckCircle2,
@@ -38,6 +38,9 @@ export default function Dashboard() {
   const [groups, setGroups] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [progressMessages, setProgressMessages] = useState([]);
+  const [insertedCount, setInsertedCount] = useState(0);
+  const [recentInserted, setRecentInserted] = useState([]);
+  const eventSourceRef = useRef(null);
   const [toast, setToast] = useState(null);
   const [viewMode, setViewMode] = useState(
     () => localStorage.getItem("leadgen-view") || "table",
@@ -111,52 +114,79 @@ export default function Dashboard() {
     fetchGroups();
   }, [fetchBusinesses, fetchGroups]);
 
-  const handleSearch = async ({ area, category }) => {
+  // Al mount: riconnetti se c'è uno scraping in corso (cambio pagina e ritorno)
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    authFetch(`${API_URL}/api/search/status`)
+      .then((r) => r.json())
+      .then(({ active }) => { if (active) connectToEvents(); })
+      .catch(() => {});
+    return () => { eventSourceRef.current?.close(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const connectToEvents = () => {
+    if (eventSourceRef.current) eventSourceRef.current.close();
+
+    const token = localStorage.getItem("token");
+    const es = new EventSource(`${API_URL}/api/search/events?token=${token}`);
+    eventSourceRef.current = es;
     setIsLoading(true);
+
+    es.onmessage = async (e) => {
+      let event;
+      try { event = JSON.parse(e.data); } catch { return; }
+
+      if (event.type === "idle") {
+        es.close();
+        setIsLoading(false);
+        return;
+      }
+      if (event.type === "progress") {
+        setProgressMessages((prev) => [...prev, event.message]);
+      } else if (event.type === "inserted") {
+        setInsertedCount(event.total);
+        setRecentInserted((prev) => [
+          { name: event.name, category: event.category },
+          ...prev.slice(0, 4),
+        ]);
+      } else if (event.type === "done") {
+        setProgressMessages((prev) => [...prev, event.message]);
+        await fetchBusinesses();
+        showToast(event.message, "success");
+        es.close();
+        setIsLoading(false);
+        setTimeout(() => { setProgressMessages([]); setInsertedCount(0); setRecentInserted([]); }, 5000);
+      } else if (event.type === "error") {
+        showToast(`Errore: ${event.message}`, "error");
+        es.close();
+        setIsLoading(false);
+      }
+    };
+
+    es.onerror = () => { es.close(); setIsLoading(false); };
+  };
+
+  const handleSearch = async ({ area, category }) => {
     setProgressMessages([]);
+    setInsertedCount(0);
+    setRecentInserted([]);
 
     try {
-      const response = await authFetch(`${API_URL}/api/search`, {
+      const res = await authFetch(`${API_URL}/api/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ area, category }),
       });
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop();
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-            if (event.type === "progress") {
-              setProgressMessages((prev) => [...prev, event.message]);
-            } else if (event.type === "done") {
-              setProgressMessages((prev) => [...prev, event.message]);
-              await fetchBusinesses();
-              showToast(event.message, "success");
-            } else if (event.type === "error") {
-              showToast(`Errore: ${event.message}`, "error");
-            }
-          } catch {
-            /* ignore json parse errors */
-          }
-        }
+      if (res.status === 409) {
+        showToast("Scraping già in corso", "error"); return;
       }
+      if (!res.ok) {
+        const err = await res.json();
+        showToast(err.error || "Errore avvio scraping", "error"); return;
+      }
+      connectToEvents();
     } catch (e) {
       showToast(`Errore di connessione: ${e.message}`, "error");
-    } finally {
-      setIsLoading(false);
-      setTimeout(() => setProgressMessages([]), 5000);
     }
   };
 
@@ -271,7 +301,7 @@ export default function Dashboard() {
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <ProgressLog messages={progressMessages} />
+                <ProgressLog messages={progressMessages} insertedCount={insertedCount} recentInserted={recentInserted} />
               </motion.div>
             </AnimatePresence>
           )}

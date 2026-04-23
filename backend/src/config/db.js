@@ -144,6 +144,10 @@ export function getDb() {
       db.exec("ALTER TABLE businesses ADD COLUMN follow_ups_enabled INTEGER DEFAULT 0");
       console.log("[db] Migration: colonna follow_ups_enabled aggiunta a businesses.");
     }
+    if (!cols.includes("email_source_url")) {
+      db.exec("ALTER TABLE businesses ADD COLUMN email_source_url TEXT DEFAULT NULL");
+      console.log("[db] Migration: colonna email_source_url aggiunta a businesses.");
+    }
 
     // Migration: user_id su campaigns
     const campCols = db.pragma("table_info(campaigns)").map((c) => c.name);
@@ -157,6 +161,20 @@ export function getDb() {
     if (!grpCols.includes("user_id")) {
       db.exec("ALTER TABLE groups ADD COLUMN user_id INTEGER REFERENCES users(id)");
       console.log("[db] Migration: colonna user_id aggiunta a groups.");
+    }
+
+    // Migration: enrichment status columns
+    if (!cols.includes("website_status")) {
+      db.exec("ALTER TABLE businesses ADD COLUMN website_status TEXT DEFAULT NULL");
+      console.log("[db] Migration: colonna website_status aggiunta.");
+    }
+    if (!cols.includes("contact_status")) {
+      db.exec("ALTER TABLE businesses ADD COLUMN contact_status TEXT DEFAULT NULL");
+      console.log("[db] Migration: colonna contact_status aggiunta.");
+    }
+    if (!cols.includes("enriched_at")) {
+      db.exec("ALTER TABLE businesses ADD COLUMN enriched_at DATETIME DEFAULT NULL");
+      console.log("[db] Migration: colonna enriched_at aggiunta.");
     }
   }
   return db;

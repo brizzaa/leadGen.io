@@ -17,6 +17,7 @@ export default function WebsitePreviewDialog({
   onRegenerate,
   isRegenerating,
   onHtmlChange,
+  onPublished,
 }) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState(null);
@@ -74,6 +75,7 @@ export default function WebsitePreviewDialog({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Errore sconosciuto");
       setPublishedUrl(data.url);
+      onPublished?.(data.url, data.screenshotUrl ?? null);
     } catch (err) {
       setPublishError(err.message);
     } finally {

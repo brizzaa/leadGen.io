@@ -30,29 +30,44 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 
 const CATEGORIES = [
-  "ristorante",
-  "pizzeria",
-  "bar",
-  "hotel",
-  "parrucchiere",
-  "idraulico",
-  "elettricista",
-  "meccanico",
-  "dentista",
-  "medico",
-  "studio legale",
-  "commercialista",
-  "panificio",
-  "pasticceria",
-  "farmacia",
-  "ottico",
-  "palestra",
-  "centro estetico",
-  "falegname",
-  "gioielleria",
-  "negozio abbigliamento",
-  "supermercato",
-  "tabaccheria",
+  // cibo & bevande
+  "ristorante","pizzeria","bar","trattoria","osteria","enoteca","gelateria",
+  "piadineria","rosticceria","kebab","sushi","gastronomia","macelleria",
+  "pescheria","fruttivendolo","caffetteria","wine bar","birrificio","cantina",
+  "pasticceria","panificio","fast food",
+  // salute
+  "dentista","medico","farmacia","fisioterapista","psicologo","veterinario",
+  "laboratorio analisi","nutrizionista","pediatra","cardiologo","ortopedico",
+  "dermatologo","ginecologo","oculista","clinica","ambulatorio","centro medico",
+  // estetica & wellness
+  "parrucchiere","centro estetico","palestra","barbiere","spa","centro massaggi",
+  "nail salon","solarium","centro benessere","yoga","pilates","crossfit",
+  "arti marziali","danza","piscina",
+  // automotive
+  "meccanico","carrozzeria","gommista","autolavaggio","officina","elettrauto",
+  "concessionaria auto","autonoleggio","stazione di servizio",
+  // servizi professionali
+  "studio legale","commercialista","notaio","architetto","geometra",
+  "agenzia immobiliare","assicurazioni","agenzia di viaggio","consulente del lavoro",
+  "studio fotografico","agenzia pubblicitaria","web agency","banca",
+  // casa & artigianato
+  "idraulico","elettricista","falegname","imbianchino","giardiniere","muratore",
+  "fabbro","impresa di pulizie","traslochi","serramentista","arredamento",
+  "cucine","infissi","pavimenti","ceramiche","tende",
+  // retail
+  "hotel","negozio abbigliamento","supermercato","tabaccheria","gioielleria",
+  "ottico","libreria","cartoleria","ferramenta","elettronica","calzature",
+  "profumeria","casalinghi","elettrodomestici","mobili","pet shop","fiori",
+  "sport","informatica","telefonia","abbigliamento bambini","orologeria",
+  "antiquariato","merceria","cosmetica","illuminazione","bricolage","edicola",
+  // formazione & intrattenimento
+  "scuola guida","scuola di lingue","musica","scuola di cucina",
+  "campo da tennis","circolo sportivo","bowling","maneggio","cinema","teatro",
+  // altri servizi
+  "bed and breakfast","agriturismo","affittacamere",
+  "lavanderia","sartoria","calzolaio","riparazione telefoni","centro stampa",
+  "tipografia","pompe funebri","toelettatura cani",
+  "fotografo","parafarmacia","erboristeria","centro scommesse",
 ];
 
 export default function SearchPanel({
@@ -69,6 +84,7 @@ export default function SearchPanel({
     e.preventDefault();
     let finalCategory;
     if (category === "__all__") finalCategory = "attività";
+    else if (category === "__grid__") finalCategory = "__grid__";
     else if (category === "__custom__") finalCategory = customCategory;
     else finalCategory = category;
     if (!area.trim() || !finalCategory.trim()) return;
@@ -125,7 +141,8 @@ export default function SearchPanel({
                   <SelectValue placeholder="Seleziona una categoria..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">Tutti</SelectItem>
+                  <SelectItem value="__all__">Tutti (per categoria)</SelectItem>
+                  <SelectItem value="__grid__">⚡ Scan Completo (griglia)</SelectItem>
                   {CATEGORIES.map((c) => (
                     <SelectItem key={c} value={c}>
                       {c.charAt(0).toUpperCase() + c.slice(1)}

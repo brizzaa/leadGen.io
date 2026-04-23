@@ -3,6 +3,7 @@ import {
   makeSlug,
   deployToNetlify,
   generateWebsiteHtml,
+  captureScreenshot,
   WEBSITE_STYLES,
   WEBSITE_ENGINES,
 } from "../../services/landingPageBuilder.js";
@@ -36,8 +37,15 @@ router.post("/:id/publish-website", requireBusinessOwnership, async (req, res) =
   if (!html) return res.status(400).json({ error: "html is required" });
 
   try {
-    const url = await deployToNetlify(html, makeSlug(req.business.name));
-    res.json({ success: true, url });
+    const slug = makeSlug(req.business.name);
+    const [url, screenshotUrl] = await Promise.all([
+      deployToNetlify(html, slug),
+      captureScreenshot(html, slug).catch((e) => {
+        console.warn("[screenshot] Failed:", e.message);
+        return null;
+      }),
+    ]);
+    res.json({ success: true, url, screenshotUrl });
   } catch (error) {
     const msg = error.response?.data?.message || error.message;
     console.error("[publish-website] Error:", msg);

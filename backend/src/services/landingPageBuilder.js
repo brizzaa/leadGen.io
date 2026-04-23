@@ -1,61 +1,23 @@
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from "fs";
+import { writeFileSync, mkdirSync, unlinkSync } from "fs";
 import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-import { execFileSync } from "child_process";
 import { tmpdir } from "os";
+import { fileURLToPath } from "url";
 import { createHash } from "crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Pubblica un file HTML su Netlify tramite file-digest API.
+ * Pubblica HTML su Cloudflare R2 + Workers (dominio leader-gen.com).
+ * Nome mantenuto `deployToNetlify` per compatibilità con chiamanti esistenti.
  * @param {string} html
  * @param {string} slug
  * @returns {Promise<string>} URL pubblico del sito
  */
 export async function deployToNetlify(html, slug) {
-  const netlifyToken = process.env.NETLIFY_TOKEN;
-  if (!netlifyToken) throw new Error("NETLIFY_TOKEN non configurato nel .env");
-
-  const { default: axios } = await import("axios");
-  const randomId = Math.random().toString(36).slice(2, 8);
-  const siteName = `leadgen-${slug}-${randomId}`;
-
-  const fileBuffer = Buffer.from(html, "utf-8");
-  const sha1 = createHash("sha1").update(fileBuffer).digest("hex");
-  const jsonHeaders = {
-    Authorization: `Bearer ${netlifyToken}`,
-    "Content-Type": "application/json",
-  };
-
-  const siteRes = await axios.post(
-    "https://api.netlify.com/api/v1/sites",
-    { name: siteName },
-    { headers: jsonHeaders, timeout: 30000 }
-  );
-  const siteId = siteRes.data.id;
-  const siteUrl = siteRes.data.ssl_url || siteRes.data.url;
-
-  const deployRes = await axios.post(
-    `https://api.netlify.com/api/v1/sites/${siteId}/deploys`,
-    { files: { "/index.html": sha1 } },
-    { headers: jsonHeaders, timeout: 30000 }
-  );
-  const deployId = deployRes.data.id;
-
-  await axios.put(
-    `https://api.netlify.com/api/v1/deploys/${deployId}/files/index.html`,
-    fileBuffer,
-    {
-      headers: {
-        Authorization: `Bearer ${netlifyToken}`,
-        "Content-Type": "application/octet-stream",
-      },
-      timeout: 30000,
-    }
-  );
-
-  return siteUrl;
+  const { buildSlug, deploySite } = await import("./cloudflareDeployer.js");
+  const fullSlug = buildSlug(slug);
+  const { url } = await deploySite(fullSlug, html);
+  return url;
 }
 
 /**
@@ -100,108 +62,345 @@ export const WEBSITE_STYLES = {
 /** Engine disponibili per la generazione */
 export const WEBSITE_ENGINES = {
   stitch: { label: "Stitch (Google)", desc: "UI specializzato, design più coerente" },
-  gemini_pro: { label: "Gemini 2.5 Pro", desc: "Alta qualità, 100 req/giorno free" },
-  gemini_flash: { label: "Gemini 2.5 Flash", desc: "Veloce, 250 req/giorno free" },
+  gemini_3_pro: { label: "Gemini 3.1 Pro", desc: "Migliore qualità design, modello più recente" },
+  gemini_pro: { label: "Gemini 2.5 Pro", desc: "Alta qualità, stabile" },
+  gemini_flash: { label: "Gemini 2.5 Flash", desc: "Veloce, economico" },
+  gemini_flash_lite: { label: "Gemini 2.5 Flash Lite", desc: "Più veloce e leggero" },
 };
 
 /**
  * Costruisce il prompt Gemini per la landing page.
  */
-function buildWebsitePrompt(biz, style) {
+/**
+ * Scrape dell'homepage del business per estrarre contesto reale (title, h1-h3, meta desc, testo).
+ * Ritorna stringa compatta (~1500 char max) da iniettare nel prompt di Gemini.
+ */
+async function scrapeSiteContext(websiteUrl) {
+  if (!websiteUrl) return null;
+  try {
+    const { default: axios } = await import("axios");
+    const { load } = await import("cheerio");
+    const res = await axios.get(websiteUrl, {
+      timeout: 10000,
+      maxRedirects: 3,
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; LeadGenBot/1.0)" },
+      responseType: "text",
+      validateStatus: (s) => s < 500,
+    });
+    const $ = load(res.data);
+    $("script, style, nav, footer").remove();
+    const title = ($("title").text() || "").trim().slice(0, 120);
+    const metaDesc = ($('meta[name="description"]').attr("content") || "").trim().slice(0, 200);
+    const h1 = $("h1").first().text().trim().slice(0, 150);
+    const h2s = $("h2").slice(0, 4).map((_, el) => $(el).text().trim()).get().join(" | ").slice(0, 250);
+    const bodyText = $("body").text().replace(/\s+/g, " ").trim().slice(0, 700);
+    const parts = [
+      title && `TITLE: ${title}`,
+      metaDesc && `META: ${metaDesc}`,
+      h1 && `H1: ${h1}`,
+      h2s && `H2s: ${h2s}`,
+      bodyText && `TEXT: ${bodyText}`,
+    ].filter(Boolean);
+    return parts.length ? parts.join("\n") : null;
+  } catch (e) {
+    console.warn(`[siteContext] ${websiteUrl} failed: ${e.message}`);
+    return null;
+  }
+}
+
+function buildWebsitePrompt(biz, style, siteContext = null) {
   const socials = [biz.facebook_url, biz.instagram_url].filter(Boolean);
-  const hasSocials = socials.length > 0;
   const hasRating = biz.rating && biz.review_count;
+  const spec = WEBSITE_STYLES[style]?.prompt || "";
 
-  return `You are an expert web designer. Generate a COMPLETE, PRODUCTION-READY single HTML file for a local Italian business landing page.
+  const info = [
+    `Nome: "${biz.name}"`,
+    `Categoria: ${biz.category || "Attività locale"}`,
+    `Città: ${biz.area || "Italia"}`,
+    biz.address && `Indirizzo: ${biz.address}`,
+    biz.phone && `Tel: ${biz.phone}`,
+    biz.email && `Email: ${biz.email}`,
+    socials.length && `Social: ${socials.join(", ")}`,
+    hasRating && `Google: ${biz.rating}★ (${biz.review_count})`,
+  ].filter(Boolean).join("\n");
 
-BUSINESS INFO:
-- Name: "${biz.name}"
-- Category: ${biz.category || "Attività locale"}
-- City: ${biz.area || "Italia"}
-${biz.address ? `- Address: ${biz.address}` : ""}
-${biz.phone ? `- Phone: ${biz.phone}` : ""}
-${biz.email ? `- Email: ${biz.email}` : ""}
-${hasSocials ? `- Social: ${socials.join(", ")}` : ""}
-${hasRating ? `- Google rating: ${biz.rating}/5 (${biz.review_count} recensioni)` : ""}
+  return `Genera UN SOLO file HTML completo per landing page di attività italiana. Testo tutto in italiano. Moderno, pulito, NON generico.
 
-TECHNICAL REQUIREMENTS:
-- Single self-contained HTML file (no external files except CDN)
-- Use Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
-- Use Google Fonts: pick a DISTINCTIVE font pairing appropriate for "${biz.category || "business"}" (avoid Inter, Roboto, Open Sans — use fonts like Playfair Display, DM Sans, Outfit, Sora, Space Grotesk, Libre Baskerville, etc.)
-- Use Lucide Icons via CDN for all icons (NO emoji): <script src="https://unpkg.com/lucide@latest"></script> then <i data-lucide="icon-name"></i> and call lucide.createIcons() at the end
-- Use placeholder images from https://picsum.photos with appropriate sizes (e.g. https://picsum.photos/800/500?random=1)
-- Responsive design (mobile-first)
-- Smooth scroll behavior
-- Subtle animations on scroll (CSS only, use @keyframes and intersection observer pattern with Tailwind)
+BUSINESS:
+${info}
+${siteContext ? `\nCONTENUTO REALE DAL LORO SITO (usa SOLO questi servizi/fatti, NON inventare):\n${siteContext}\n` : `\nATTENZIONE: nessun contenuto reale disponibile. Servizi generici plausibili per la categoria, NO dettagli specifici inventati, NO testimonial con nomi falsi.\n`}
+STACK: Tailwind CDN (<script src="https://cdn.tailwindcss.com"></script>), Lucide Icons (<script src="https://unpkg.com/lucide@latest"></script> + lucide.createIcons()), Google Fonts (coppia distintiva adatta alla categoria, evita Inter/Roboto). Config Tailwind con \`primary\`/\`secondary\` in palette coerente con categoria (ristoranti=caldi, wellness=pastello, tech=scuro, edilizia=industriale). NO viola/indaco di default.
 
-DESIGN REQUIREMENTS:
-- Choose a color palette that fits the business category "${biz.category || "business"}". DO NOT default to purple/indigo. Think about what colors evoke the right feeling for this specific type of business.
-- Light or dark theme based on what fits the business category better (restaurants/food = warm light theme, tech/digital = dark, beauty/wellness = soft pastels, construction/trades = bold and industrial)
-- Configure Tailwind with custom colors in a <script> block: tailwind.config = { theme: { extend: { colors: { primary: '...', secondary: '...' }}}}
-- Professional, modern, NOT generic "AI slop". Make it look like a real business website.
-- Good whitespace, visual hierarchy, readable typography
-${WEBSITE_STYLES[style]?.prompt || ""}
+SEZIONI OBBLIGATORIE (in ordine, nessun altra): navbar sticky (Servizi/Chi Siamo/Contatti, hamburger mobile) • hero full-bleed con nome + tagline + CTA "Contattaci"${hasRating ? ` + badge rating ${biz.rating}★ (${biz.review_count} recensioni Google)` : ""} • 3-4 servizi con icone Lucide • Chi Siamo (2-3 frasi, immagine + testo)${hasRating ? ` • riquadro con rating Google ${biz.rating}★ e "${biz.review_count} recensioni verificate" come social proof (NO testimonial inventati)` : ""} • contatti (${biz.phone ? "tel reale, " : ""}${biz.email ? "email reale, " : ""}${biz.address ? "indirizzo reale" : ""}) senza form${socials.length ? "; link social reali" : ""} • footer con nome + © 2026.
 
-PAGE SECTIONS (in order):
-1. NAVBAR: sticky, business name on left, nav links on right (Servizi, Chi Siamo, Contatti), mobile hamburger menu with JS toggle
-2. HERO: full-width, gradient or image background, business name as large heading, compelling Italian tagline for this specific business type, primary CTA button ("Contattaci" or similar)${hasRating ? `, show the Google rating (${biz.rating}★ — ${biz.review_count} recensioni) as a trust badge` : ""}
-3. SERVICES: 3-4 service cards with Lucide icons. INVENT realistic services that a "${biz.category || "business"}" in Italy would actually offer. Each with title + short description.
-4. ABOUT: brief "Chi Siamo" section with a placeholder image on one side and text on the other. Write 2-3 sentences about a "${biz.category || "business"}" in ${biz.area || "Italia"}.
-5. TESTIMONIALS: 2-3 fake but realistic Italian testimonials with names and star ratings. Make them specific to "${biz.category || "this business"}".
-6. CONTACT: clean contact section with business info (address, phone, email) displayed with Lucide icons. Add a simple styled contact form (name, email, message, submit button — form action="#" is fine).${hasSocials ? ` Include social media links.` : ""}
-7. FOOTER: business name, copyright 2025, "Tutti i diritti riservati"
+REGOLE ASSOLUTE:
+- VIETATO inventare testimonial, nomi clienti, recensioni fake
+- VIETATO placeholder come "Un Cliente Soddisfatto", "Lorem Ipsum", href="#" vuoti, email fake
+- VIETATO contact form (non c'è backend che riceve) — usa invece pulsanti "Chiama" (tel:) / "Scrivici" (mailto:)
+- SE un dato non c'è (no email, no social, no rating) OMETTI completamente la sezione/elemento, NON mettere placeholder
+- Metti <title> completo e <meta name="description"> con tagline italiana specifica al business
 
-ALL TEXT MUST BE IN ITALIAN.
-Display the real business name, phone, email and address prominently throughout.
+IMMAGINI: <img src="https://picsum.photos/1200/800?random=N" alt="..."> (sostituite post-build). Alt tag italiani descrittivi.
 
-OUTPUT: Return ONLY the complete HTML code. No markdown fences, no explanations, no comments before or after. Start with <!DOCTYPE html> and end with </html>.`;
+OUTPUT: solo HTML da <!DOCTYPE html> a </html>. NO markdown, NO commenti.
+
+ESEMPIO STRUTTURA (adatta palette/font/copy al business specifico):
+<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NomeBusiness</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<script>tailwind.config={theme:{extend:{colors:{primary:'#8B4513',secondary:'#F5E6D3'},fontFamily:{display:['Playfair Display','serif'],body:['DM Sans','sans-serif']}}}}</script>
+</head><body class="font-body text-stone-800 bg-stone-50">
+<nav class="sticky top-0 bg-white/90 backdrop-blur z-50 border-b">...</nav>
+<section class="relative h-screen flex items-center"><img src="..." class="absolute inset-0 w-full h-full object-cover"><div class="relative z-10 text-white px-8"><h1 class="font-display text-6xl">...</h1><p class="mt-4 text-xl">...</p><a class="mt-8 inline-block bg-primary px-8 py-3 rounded-full">Contattaci</a></div></section>
+<section id="servizi" class="py-24 max-w-6xl mx-auto px-6"><h2 class="font-display text-4xl mb-12">...</h2><div class="grid md:grid-cols-3 gap-8">...</div></section>
+...
+<script src="https://unpkg.com/lucide@latest"></script><script>lucide.createIcons()</script>
+</body></html>
+${spec}`;
 }
 
 /** Keyword Pexels/Unsplash per categoria business */
 const CATEGORY_IMAGE_KEYWORDS = {
   ristorante:    ["italian restaurant interior", "pasta dish", "restaurant table candles"],
+  trattoria:     ["italian trattoria rustic", "traditional italian food", "wine restaurant"],
+  osteria:       ["italian osteria rustic", "wine bar italian", "traditional italian food"],
   pizzeria:      ["pizza neapolitan", "pizzeria wood oven", "italian pizza"],
   bar:           ["italian espresso coffee bar", "barista coffee", "cafe interior"],
   pasticceria:   ["italian pastry shop", "croissants pastries", "bakery display"],
   gelateria:     ["gelato shop colorful", "italian ice cream", "gelateria"],
-  parrucchiere:  ["hair salon interior", "hairstylist work", "barbershop modern"],
-  estetica:      ["beauty spa treatment", "wellness massage", "nail salon luxury"],
-  dentista:      ["dental clinic modern", "dentist office bright", "dental care"],
-  avvocato:      ["law office elegant", "lawyer desk books", "legal consultation"],
-  commercialista:["accounting office", "financial advisor desk", "business meeting"],
-  idraulico:     ["plumber professional work", "bathroom renovation", "pipes plumbing"],
-  elettricista:  ["electrician work", "electrical panel modern", "wiring professional"],
-  palestra:      ["gym fitness modern", "workout training", "gym equipment"],
+  panificio:     ["artisan bakery bread", "italian bakery interior", "fresh bread"],
+  parrucchier:   ["hair salon interior", "hairstylist work", "barbershop modern"],
+  barbier:       ["barbershop modern", "barber professional", "men haircut"],
+  estetic:       ["beauty spa treatment", "wellness massage", "nail salon luxury"],
+  wellness:      ["wellness spa", "beauty spa treatment", "relaxation massage"],
+  spa:           ["luxury spa treatment", "wellness massage", "spa interior zen"],
+  massaggi:      ["massage therapy", "wellness massage room", "spa treatment"],
+  dentist:       ["dental clinic modern", "dentist office bright", "dental care"],
+  medic:         ["medical clinic modern", "doctor office bright", "healthcare professional"],
+  fisioterap:    ["physiotherapy clinic", "rehabilitation physical therapy", "medical treatment"],
+  psicolog:      ["therapy office calm", "counseling session", "psychology clinic"],
+  ottic:         ["optical store eyewear", "glasses boutique", "optician shop"],
+  farmaci:       ["pharmacy interior modern", "pharmacist professional", "medicine health"],
+  avvocat:       ["law office elegant", "lawyer desk books", "legal consultation"],
+  notai:         ["notary office professional", "legal documents desk", "law office"],
+  commercialist: ["accounting office", "financial advisor desk", "business meeting"],
+  consulen:      ["business consulting", "professional meeting office", "corporate advisor"],
+  agenzia:       ["modern agency office", "creative workspace", "business team meeting"],
+  immobil:       ["luxury home exterior", "real estate modern house", "apartment interior design"],
+  architett:     ["architecture studio modern", "architect desk drawings", "modern interior design"],
+  ingegner:      ["engineering office modern", "technical drawings", "professional workspace"],
+  idraulic:      ["plumber professional work", "bathroom renovation", "pipes plumbing"],
+  elettricist:   ["electrician work", "electrical panel modern", "wiring professional"],
+  edil:          ["construction site modern", "builder professional", "building renovation"],
+  serrament:     ["modern windows installation", "doors frames professional", "aluminum windows"],
+  carrozzer:     ["car body shop professional", "auto repair painting", "car restoration"],
+  autoffic:      ["auto repair garage", "mechanic car service", "automotive workshop"],
+  gommist:       ["tire shop professional", "wheel alignment", "automotive tires"],
+  concessionari: ["car dealership modern", "new cars showroom", "automotive dealer"],
+  autonoleggio:  ["car rental service", "modern fleet cars", "vehicle rental"],
+  palestr:       ["gym fitness modern", "workout training", "gym equipment"],
+  fitness:       ["fitness center modern", "personal training gym", "workout equipment"],
+  "personal train": ["personal trainer", "fitness coach workout", "gym training session"],
+  crossfit:      ["crossfit box training", "functional fitness", "gym high intensity"],
   yoga:          ["yoga studio calm", "meditation wellness", "yoga pose natural light"],
-  farmacia:      ["pharmacy interior modern", "pharmacist professional", "medicine health"],
-  ottico:        ["optical store eyewear", "glasses boutique", "optician shop"],
-  autofficina:   ["auto repair garage", "mechanic car service", "automotive workshop"],
-  immobiliare:   ["luxury home exterior", "real estate modern house", "apartment interior design"],
-  default:       ["small business interior", "local shop italy", "professional workspace"],
+  pilates:       ["pilates studio reformer", "pilates class bright", "wellness fitness"],
+  danza:         ["dance studio mirrors", "ballet studio bright", "dancers practice"],
+  scuola:        ["school classroom modern", "students learning", "education bright"],
+  asilo:         ["kindergarten colorful", "children playing", "preschool bright"],
+  libreri:       ["bookstore interior cozy", "books shelves library", "reading corner"],
+  fior:          ["flower shop colorful", "florist arrangement", "fresh flowers bouquet"],
+  fotograf:      ["photography studio", "professional photographer camera", "photo studio lights"],
+  gioiell:       ["jewelry store luxury", "jewelry display case", "rings diamonds"],
+  abbigl:        ["boutique fashion store", "clothing shop interior", "fashion retail"],
+  calzatur:      ["shoe store boutique", "shoes display shelves", "footwear retail"],
+  lavander:      ["laundry service professional", "dry cleaning shop", "clean clothes"],
+  pulizi:        ["professional cleaning service", "cleaning staff work", "clean modern office"],
+  giardin:       ["landscape gardening", "garden design professional", "green hedge"],
+  veterinari:    ["veterinary clinic modern", "vet with pet", "animal care clinic"],
+  petshop:       ["pet store colorful", "pet supplies shop", "dog accessories"],
+  toelett:       ["dog grooming salon", "professional pet grooming", "dog bath care"],
+  "dog groom":   ["dog grooming salon", "professional pet grooming", "pet spa"],
+  "pet groom":   ["pet grooming salon", "dog grooming", "cat grooming care"],
+  "zampa":       ["dog grooming salon", "pet care shop", "happy dog"],
+  "cane":        ["dog grooming salon", "professional dog care", "happy dogs"],
+  "animali":     ["pet care shop", "veterinary clinic", "dog and cat happy"],
+  "compro oro":  ["gold jewelry shop", "gold coins trade", "luxury jewelry store"],
+  "oreficeri":   ["gold jewelry boutique", "goldsmith workshop", "jewelry craftsmanship"],
+  "gioiell":     ["jewelry store elegant", "diamond ring display", "luxury jewelry"],
+  "autoneri":    ["car tire shop", "auto parts store", "car accessories shop"],
+  "automec":     ["car mechanic workshop", "auto repair garage", "car service"],
+  "slimmer":     ["personal trainer woman", "fitness coach weight loss", "healthy lifestyle"],
+  "bodytec":     ["EMS training fitness", "electrostimulation workout", "personal training gym"],
+  "firstfit":    ["fitness center modern", "gym workout training", "fitness equipment"],
+  "synerg":      ["modern office workspace", "tech business team", "professional consulting"],
+  "dott":        ["medical doctor office", "healthcare professional", "medical clinic modern"],
+  "dr ":         ["medical doctor office", "healthcare professional", "medical clinic modern"],
+  "sanitaria":   ["pharmacy shop interior", "medical supplies store", "healthcare retail"],
+  "ortoped":     ["orthopedic clinic", "physiotherapy session", "medical rehabilitation"],
+  "psicol":      ["therapy office calm", "counseling session", "psychology clinic"],
+  "studio legal":["law office elegant", "lawyer consultation", "legal documents"],
+  "macelleri":   ["italian butcher shop", "meat counter display", "artisan butchery"],
+  "pescheri":    ["fish market italian", "fresh fish display", "fishmonger shop"],
+  "alimentari":  ["italian grocery shop", "local food store", "delicatessen shelves"],
+  "forneri":     ["artisan bakery bread", "italian bakery", "fresh bread shop"],
+  "caffett":     ["italian cafe espresso", "barista coffee bar", "cozy coffee shop"],
+  "piadin":      ["piadina romagnola", "italian street food", "flatbread sandwich"],
+  "kebab":       ["kebab restaurant", "middle eastern food", "turkish grill shop"],
+  "sushi":       ["sushi restaurant modern", "japanese cuisine", "sushi bar counter"],
+  "indian":      ["indian restaurant interior", "curry dish", "indian cuisine"],
+  "cinese":      ["chinese restaurant", "asian cuisine dumplings", "chinese food"],
+  "birrer":      ["craft beer bar", "pub interior cozy", "beer taps"],
+  "enoteca":     ["wine bar italian", "wine tasting room", "wine bottles display"],
+  "pub":         ["cozy pub interior", "beer glasses wooden bar", "gastropub"],
+  "lavasecco":   ["dry cleaning shop", "laundry service", "clothing care"],
+  "serrand":     ["roller shutter installation", "garage door repair", "metal shutters"],
+  "pavimen":     ["floor tiles installation", "wood flooring craft", "home renovation"],
+  "onoranze":    ["funeral services discreet", "memorial flowers", "floral tribute"],
+  "ottic":       ["optical store eyewear", "glasses boutique", "optician shop"],
+  "erboristeri": ["herbal shop natural", "herbs tea display", "natural wellness"],
+  "vivaio":      ["plant nursery garden", "flowers greenhouse", "gardening shop"],
+  "ferramenta":  ["hardware store tools", "italian ferramenta", "tools workshop"],
+  "tipografi":   ["printing press shop", "graphic printing", "print studio"],
+  "stamperi":    ["printing shop professional", "graphic design studio", "print production"],
+  "immobili":    ["luxury home exterior", "real estate modern house", "apartment interior"],
+  "ass. ":       ["business association office", "meeting room professional", "community group"],
+  tatuaggio:     ["tattoo studio professional", "tattoo artist work", "tattoo parlor modern"],
+  assicurazion:  ["insurance office professional", "financial consulting", "business advisor desk"],
+  banca:         ["bank interior modern", "financial services", "bank advisor desk"],
+  "web agency":  ["web design agency", "developer workspace", "creative digital office"],
+  hotel:         ["boutique hotel lobby", "modern hotel room", "hospitality interior"],
+  "b&b":         ["bed and breakfast cozy", "italian guest house", "charming accommodation"],
+  casa:          ["modern italian home interior", "residential house architecture", "home design"],
+  pizzer:        ["pizza neapolitan", "pizzeria wood oven", "italian pizza"],
+  default:       ["italian small business", "professional local shop italy", "modern italian workspace"],
 };
 
-function getCategoryImageKeywords(category) {
-  if (!category) return CATEGORY_IMAGE_KEYWORDS.default;
-  const cat = category.toLowerCase();
-  for (const [key, kws] of Object.entries(CATEGORY_IMAGE_KEYWORDS)) {
-    if (cat.includes(key)) return kws;
+/**
+ * Trova keyword dalla categoria E dal nome del business (fallback).
+ * Il nome è spesso più informativo della categoria quando quest'ultima è generica ("attività").
+ */
+function getCategoryImageKeywords(category, name = "") {
+  const haystack = `${category || ""} ${name || ""}`.toLowerCase();
+  if (haystack.trim()) {
+    for (const [key, kws] of Object.entries(CATEGORY_IMAGE_KEYWORDS)) {
+      if (key === "default") continue;
+      if (haystack.includes(key)) return kws;
+    }
   }
   return CATEGORY_IMAGE_KEYWORDS.default;
 }
 
 /**
+ * Scrapes Pixabay search results (CC0, no API key required).
+ */
+async function scrapePixabay(keyword, count = 6) {
+  const { default: axios } = await import("axios");
+  const encoded = encodeURIComponent(keyword);
+  const res = await axios.get(
+    `https://pixabay.com/images/search/${encoded}/?image_type=photo`,
+    {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+      },
+      timeout: 15000,
+    }
+  );
+  // Extract CDN image URLs from raw HTML — works regardless of markup changes
+  const cdnPattern = /https:\/\/cdn\.pixabay\.com\/photo\/[^"'\s,]+?_(?:640|1280)\.(?:jpg|jpeg|png)/g;
+  const matches = [...new Set(res.data.match(cdnPattern) || [])];
+  return matches.slice(0, count);
+}
+
+/**
+ * Keyword-based images via loremflickr (Flickr CC pool, no API key).
+ * Follows redirects to return stable cache URLs directly usable in HTML.
+ */
+async function fetchLoremFlickrUrls(keywords, count) {
+  const { default: axios } = await import("axios");
+  const sizes = ["1600/900", "1200/800", "800/600"];
+  const tasks = keywords.flatMap((kw, ki) => {
+    const encoded = encodeURIComponent(kw.replace(/\s+/g, ","));
+    return Array.from({ length: Math.ceil(count / keywords.length) }, (_, i) => {
+      const size = sizes[i % sizes.length];
+      const lock = ki * 20 + i + 1;
+      return `https://loremflickr.com/${size}/${encoded}?lock=${lock}`;
+    });
+  }).slice(0, count);
+
+  const results = await Promise.allSettled(
+    tasks.map(url =>
+      axios.get(url, { maxRedirects: 5, timeout: 10000, responseType: "arraybuffer" })
+        .then(res => res.request.res?.responseUrl || url)
+    )
+  );
+
+  return results
+    .filter(r => r.status === "fulfilled")
+    .map(r => r.value);
+}
+
+/**
+ * Openverse: aggregatore WordPress CC (700M+ immagini), zero API key.
+ */
+async function fetchOpenverse(keyword, count = 8) {
+  const { default: axios } = await import("axios");
+  const res = await axios.get("https://api.openverse.org/v1/images/", {
+    params: {
+      q: keyword,
+      license: "cc0,pdm,by",
+      page_size: count,
+      mature: false,
+      aspect_ratio: "wide",
+    },
+    timeout: 12000,
+  });
+  return (res.data.results || []).map(r => r.url).filter(Boolean);
+}
+
+/**
  * Recupera URL immagini reali.
- * Usa Pexels se PEXELS_API_KEY disponibile, altrimenti Unsplash Source (no key).
+ * Priority: Pixabay API (se key) → Pexels API (se key) → Openverse (zero-config).
  */
 async function fetchRealImageUrls(keywords, count = 6) {
   const { default: axios } = await import("axios");
 
+  if (process.env.PIXABAY_API_KEY) {
+    for (const kw of keywords) {
+      try {
+        const res = await axios.get("https://pixabay.com/api/", {
+          params: {
+            key: process.env.PIXABAY_API_KEY,
+            q: kw,
+            image_type: "photo",
+            orientation: "horizontal",
+            safesearch: "true",
+            per_page: Math.max(20, count * 3),
+            order: "popular",
+          },
+          timeout: 10000,
+        });
+        const all = (res.data.hits || []).map(h => h.largeImageURL || h.webformatURL);
+        if (all.length >= 2) {
+          // Shuffle: evita che 2 business con stessa keyword ricevano stessa sequenza
+          for (let i = all.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [all[i], all[j]] = [all[j], all[i]];
+          }
+          return all.slice(0, count);
+        }
+      } catch (e) {
+        console.warn(`[images] Pixabay API fallito per "${kw}":`, e.message);
+      }
+    }
+  }
+
   if (process.env.PEXELS_API_KEY) {
     try {
-      const query = keywords[0]; // keyword principale
       const res = await axios.get("https://api.pexels.com/v1/search", {
         headers: { Authorization: process.env.PEXELS_API_KEY },
-        params: { query, per_page: count, orientation: "landscape" },
+        params: { query: keywords[0], per_page: count, orientation: "landscape" },
         timeout: 10000,
       });
       const urls = res.data.photos.map(p => p.src.large);
@@ -211,14 +410,17 @@ async function fetchRealImageUrls(keywords, count = 6) {
     }
   }
 
-  // Fallback: Unsplash Source (nessuna API key, immagini pertinenti)
-  return keywords.flatMap((kw, ki) =>
-    Array.from({ length: Math.ceil(count / keywords.length) }, (_, i) => {
-      const encoded = encodeURIComponent(kw);
-      const sizes = ["1600x900", "1200x800", "800x600"];
-      return `https://source.unsplash.com/featured/${sizes[i % sizes.length]}/?${encoded}&sig=${ki * 10 + i}`;
-    })
-  ).slice(0, count);
+  // Openverse (zero-config, CC aggregato Wikimedia+Flickr+altri)
+  for (const kw of keywords) {
+    try {
+      const urls = await fetchOpenverse(kw, count);
+      if (urls.length >= 2) return urls;
+    } catch (e) {
+      console.warn(`[images] Openverse fallito per "${kw}":`, e.message);
+    }
+  }
+
+  return [];
 }
 
 /**
@@ -226,7 +428,7 @@ async function fetchRealImageUrls(keywords, count = 6) {
  * con foto reali e pertinenti alla categoria del business.
  */
 async function replaceImagesWithReal(html, biz) {
-  const keywords = getCategoryImageKeywords(biz.category);
+  const keywords = getCategoryImageKeywords(biz.category, biz.name);
   let imageUrls;
   try {
     imageUrls = await fetchRealImageUrls(keywords, 8);
@@ -349,24 +551,26 @@ All text in Italian. Tailwind CSS. Unique non-generic design. Show real contact 
 /**
  * Genera HTML via Gemini API.
  */
-async function generateWithGemini(biz, style, model = "gemini-2.5-pro") {
+async function generateWithGemini(biz, style, model = "gemini-2.5-pro", siteContext = null) {
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (!geminiApiKey) throw new Error("GEMINI_API_KEY non configurata");
 
   const { default: axios } = await import("axios");
-  const prompt = buildWebsitePrompt(biz, style);
+  const prompt = buildWebsitePrompt(biz, style, siteContext);
 
-  const response = await axios.post(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
-    {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 1,
-        maxOutputTokens: 16384,
-      },
-    },
-    { headers: { "Content-Type": "application/json" }, timeout: 120000 },
-  );
+  let response;
+  try {
+    response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
+      { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1, maxOutputTokens: 16384 } },
+      { headers: { "Content-Type": "application/json" }, timeout: 120000 },
+    );
+  } catch (e) {
+    if (e.response) {
+      console.error(`[gemini ${model}] ${e.response.status}:`, JSON.stringify(e.response.data).slice(0, 500));
+    }
+    throw e;
+  }
 
   let html = response.data.candidates[0].content.parts[0].text;
   html = html.replace(/^```html?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
@@ -388,6 +592,10 @@ async function generateWithGemini(biz, style, model = "gemini-2.5-pro") {
 export async function generateWebsiteHtml(biz, style = "auto", engine = "auto") {
   let rawHtml, usedEngine;
 
+  // Scrape context dal sito esistente del business (se presente) — dà a Gemini copy accurato
+  const siteContext = biz.website ? await scrapeSiteContext(biz.website) : null;
+  if (siteContext) console.log(`[generate-website] Context scraped from ${biz.website} (${siteContext.length} chars)`);
+
   // Auto: prova Stitch se disponibile, poi Gemini Pro, poi Flash
   if (engine === "auto") {
     if (process.env.STITCH_API_KEY) {
@@ -399,24 +607,38 @@ export async function generateWebsiteHtml(biz, style = "auto", engine = "auto") 
       }
     }
     if (!rawHtml && process.env.GEMINI_API_KEY) {
-      try {
-        rawHtml = await generateWithGemini(biz, style, "gemini-2.5-pro");
-        usedEngine = "gemini_pro";
-      } catch (e) {
-        console.warn("[generate-website] Gemini Pro fallito, fallback a Flash:", e.message);
-        rawHtml = await generateWithGemini(biz, style, "gemini-2.5-flash");
-        usedEngine = "gemini_flash";
+      const modelChain = [
+        ["gemini-3.1-pro-preview", "gemini_3_pro"],
+        ["gemini-3-flash-preview",  "gemini_3_flash"],
+        ["gemini-2.5-pro",          "gemini_pro"],
+        ["gemini-2.5-flash",        "gemini_flash"],
+      ];
+      for (const [model, key] of modelChain) {
+        try {
+          rawHtml = await generateWithGemini(biz, style, model, siteContext);
+          usedEngine = key;
+          break;
+        } catch (e) {
+          console.warn(`[generate-website] ${model} fallito:`, e.message);
+        }
       }
+      if (!rawHtml) throw new Error("Tutti i modelli Gemini hanno fallito");
     }
     if (!rawHtml) throw new Error("Nessuna API key configurata (STITCH_API_KEY o GEMINI_API_KEY)");
   } else if (engine === "stitch") {
     rawHtml = await generateWithStitch(biz, style);
     usedEngine = "stitch";
+  } else if (engine === "gemini_3_pro") {
+    rawHtml = await generateWithGemini(biz, style, "gemini-3.1-pro-preview", siteContext);
+    usedEngine = "gemini_3_pro";
   } else if (engine === "gemini_pro") {
-    rawHtml = await generateWithGemini(biz, style, "gemini-2.5-pro");
+    rawHtml = await generateWithGemini(biz, style, "gemini-2.5-pro", siteContext);
     usedEngine = "gemini_pro";
+  } else if (engine === "gemini_flash_lite") {
+    rawHtml = await generateWithGemini(biz, style, "gemini-2.5-flash-lite", siteContext);
+    usedEngine = "gemini_flash_lite";
   } else {
-    rawHtml = await generateWithGemini(biz, style, "gemini-2.5-flash");
+    rawHtml = await generateWithGemini(biz, style, "gemini-2.5-flash", siteContext);
     usedEngine = "gemini_flash";
   }
 
@@ -426,35 +648,13 @@ export async function generateWebsiteHtml(biz, style = "auto", engine = "auto") 
 }
 
 /**
- * Fa il deploy dell'HTML su surge.sh (fallback: Netlify).
+ * Fa il deploy dell'HTML su Netlify.
  * @param {string} html
  * @param {string} slug — slug del business (lettere minuscole, trattini)
  * @returns {Promise<string>} URL pubblico
  */
 export async function deployPage(html, slug) {
-  const randomId = Math.random().toString(36).slice(2, 8);
-  const domain = `leadgen-${slug}-${randomId}.surge.sh`;
-  const dir = join(tmpdir(), `leadgen-deploy-${Date.now()}`);
-
-  try {
-    mkdirSync(dir);
-    writeFileSync(join(dir, "index.html"), html, "utf8");
-
-    // Deploy su surge.sh (usa execFileSync per evitare command injection)
-    try {
-      const surgeBin = join(__dirname, "../../node_modules/.bin/surge");
-      execFileSync(surgeBin, [dir, domain, "--token", process.env.SURGE_TOKEN], {
-        encoding: "utf8",
-        timeout: 45000,
-      });
-      return `https://${domain}`;
-    } catch (surgeError) {
-      // surge fallito — rilancia l'errore, il business verrà marcato come failed
-      throw new Error("surge deploy fallito: " + surgeError.message);
-    }
-  } finally {
-    try { rmSync(dir, { recursive: true }); } catch {}
-  }
+  return deployToNetlify(html, slug);
 }
 
 /**
@@ -472,4 +672,65 @@ export function makeSlug(name) {
     .replace(/-+/g, "-")
     .slice(0, 30)
     .replace(/-$/, "");
+}
+
+/**
+ * Converts Tailwind CDN classes to inline CSS and strips all <script> tags.
+ * Makes the HTML email-compatible (no JS, no CDN dependencies).
+ */
+export async function inlineForEmail(html) {
+  const { makeStylesInline } = await import("tailwind-to-inline");
+  const tmpFile = join(tmpdir(), `leadgen-inline-${Date.now()}.html`);
+  try {
+    writeFileSync(tmpFile, html, "utf8");
+    const inlined = await makeStylesInline(tmpFile);
+    // Strip all <script> tags
+    return inlined.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+  } finally {
+    try { unlinkSync(tmpFile); } catch {}
+  }
+}
+
+/**
+ * Takes a 1440x900 screenshot of the generated HTML using Playwright.
+ * Saves to uploads/screenshots/ and returns the public path.
+ * @param {string} html
+ * @param {string} slug
+ * @returns {Promise<string>} path like "/uploads/screenshots/slug-timestamp.jpg"
+ */
+/**
+ * Cattura screenshot del sito.
+ * Preferisce URL live (rendering fedele: Tailwind CDN + fonts + immagini già caricate).
+ * Fallback a HTML inline se URL non disponibile.
+ */
+export async function captureScreenshot({ url, html, slug }) {
+  const { chromium } = await import("playwright");
+  const screenshotDir = join(__dirname, "../../../uploads/screenshots");
+  mkdirSync(screenshotDir, { recursive: true });
+
+  const filename = `${slug}-${Date.now()}.jpg`;
+  const filepath = join(screenshotDir, filename);
+
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+
+    if (url) {
+      await page.goto(url, { waitUntil: "networkidle", timeout: 60000 });
+    } else if (html) {
+      await page.setContent(html, { waitUntil: "networkidle", timeout: 30000 });
+    } else {
+      throw new Error("captureScreenshot: serve url o html");
+    }
+
+    // Attendi fonts + 1.5s per CSS transitions/animazioni settle
+    await page.evaluate(() => document.fonts?.ready).catch(() => {});
+    await page.waitForTimeout(1500);
+
+    await page.screenshot({ path: filepath, type: "jpeg", quality: 90, fullPage: false });
+  } finally {
+    await browser.close();
+  }
+
+  return `/uploads/screenshots/${filename}`;
 }

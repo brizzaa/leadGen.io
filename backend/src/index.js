@@ -14,12 +14,13 @@ import trackingRouter from "./routes/tracking.js";
 import authRouter from "./routes/auth.js";
 import analyticsRouter from "./routes/analytics.js";
 import { requireAuth } from "./middleware/auth.js";
-import { startFollowUpCron } from "./services/followUpEngine.js";
+import { startEnrichmentWorker } from "./services/enrichmentWorker.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Ensure data directory exists
+// Ensure data/uploads directories exist
 mkdirSync(join(__dirname, "../../data"), { recursive: true });
+mkdirSync(join(__dirname, "../../uploads/screenshots"), { recursive: true });
 
 const app = express();
 const PORT = 3001;
@@ -48,6 +49,10 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ error: "Internal Server Error" });
 });
 
+// Serve uploads (screenshots etc.)
+const uploadsPath = join(__dirname, "../../uploads");
+app.use("/uploads", express.static(uploadsPath));
+
 // Serve frontend static files in production
 const distPath = join(__dirname, "../../frontend/dist");
 app.use(express.static(distPath));
@@ -63,5 +68,5 @@ app.get("*", (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`LeadGen.io running on http://localhost:${PORT}`);
-  startFollowUpCron();
+  startEnrichmentWorker();
 });

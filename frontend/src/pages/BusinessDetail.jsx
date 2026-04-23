@@ -96,6 +96,10 @@ export default function BusinessDetail() {
   const [websiteStyle, setWebsiteStyle] = useState("auto");
   const [websiteEngine, setWebsiteEngine] = useState("auto");
   const [usedEngine, setUsedEngine] = useState(null);
+  const [publishedSiteUrl, setPublishedSiteUrl] = useState(null);
+  const [publishedScreenshotUrl, setPublishedScreenshotUrl] = useState(null);
+  const [isSendingSite, setIsSendingSite] = useState(false);
+  const [siteSentSuccess, setSiteSentSuccess] = useState(false);
 
   const [allGroups, setAllGroups] = useState([]);
   const [businessGroups, setBusinessGroups] = useState([]);
@@ -329,6 +333,8 @@ export default function BusinessDetail() {
           generatedEmail,
           toEmail: business.email,
           subject: emailSubject,
+          websiteUrl: publishedSiteUrl || null,
+          screenshotUrl: publishedScreenshotUrl || null,
         }),
       });
       const data = await res.json();
@@ -415,6 +421,53 @@ export default function BusinessDetail() {
       console.error(e);
     } finally {
       setIsTogglingFollowUps(false);
+    }
+  };
+
+  // Returns best available outreach channel for the business
+  function getOutreachChannel(biz) {
+    if (biz.email) return { type: "email", label: "Email", value: biz.email };
+    const rawPhone = biz.phone?.replace(/\D/g, "");
+    if (rawPhone) return { type: "whatsapp", label: "WhatsApp", value: rawPhone };
+    if (biz.facebook_url) return { type: "facebook", label: "Facebook DM", value: biz.facebook_url };
+    if (biz.instagram_url) return { type: "instagram", label: "Instagram DM", value: biz.instagram_url };
+    return null;
+  }
+
+  const handleSendSite = async () => {
+    const channel = getOutreachChannel(business);
+    if (!channel || !publishedSiteUrl) return;
+    setIsSendingSite(true);
+    setSiteSentSuccess(false);
+    try {
+      if (channel.type === "email") {
+        const res = await authFetch(`${API_URL}/api/businesses/${id}/send-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            generatedEmail: `Ciao,\n\nHo realizzato un sito web per la tua attività — puoi vederlo qui:\n${publishedSiteUrl}\n\nFammi sapere cosa ne pensi, nessun impegno.\n\n${process.env.MY_NAME || "Luca Brizzante"}`,
+            toEmail: business.email,
+            subject: `Ho creato un sito per ${business.name}`,
+            websiteUrl: publishedSiteUrl,
+            screenshotUrl: publishedScreenshotUrl,
+          }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        setSiteSentSuccess(true);
+      } else if (channel.type === "whatsapp") {
+        const text = encodeURIComponent(
+          `Ciao! Ho realizzato un sito web per ${business.name}:\n${publishedSiteUrl}\n\nFammi sapere cosa ne pensi!`
+        );
+        window.open(`https://wa.me/${channel.value}?text=${text}`, "_blank");
+        setSiteSentSuccess(true);
+      } else {
+        window.open(channel.value, "_blank");
+        setSiteSentSuccess(true);
+      }
+    } catch (e) {
+      setAlertConfig({ title: "Errore invio", description: e.message });
+    } finally {
+      setIsSendingSite(false);
     }
   };
 
@@ -633,8 +686,10 @@ export default function BusinessDetail() {
               >
                 <option value="auto">Engine: Auto</option>
                 <option value="stitch">Stitch (Google)</option>
+                <option value="gemini_3_pro">Gemini 3.1 Pro ✨</option>
                 <option value="gemini_pro">Gemini 2.5 Pro</option>
                 <option value="gemini_flash">Gemini 2.5 Flash</option>
+                <option value="gemini_flash_lite">Gemini 2.5 Flash Lite</option>
               </select>
               <select
                 value={websiteStyle}
@@ -664,10 +719,59 @@ export default function BusinessDetail() {
             </div>
             {usedEngine && !isGeneratingWebsite && (
               <span className="text-[10px] text-muted-foreground mt-1">
-                Generato con: {usedEngine === "stitch" ? "Stitch" : usedEngine === "gemini_pro" ? "Gemini Pro" : "Gemini Flash"}
+                Generato con: {{
+                  stitch: "Stitch",
+                  gemini_3_pro: "Gemini 3.1 Pro",
+                  gemini_pro: "Gemini 2.5 Pro",
+                  gemini_flash: "Gemini 2.5 Flash",
+                  gemini_flash_lite: "Gemini 2.5 Flash Lite",
+                }[usedEngine] ?? usedEngine}
               </span>
             )}
           </div>
+
+          {/* Published site — outreach row */}
+          {publishedSiteUrl && (() => {
+            const channel = getOutreachChannel(business);
+            const channelIcon = {
+              email: <Mail className="w-3.5 h-3.5" />,
+              whatsapp: <MessageCircle className="w-3.5 h-3.5" />,
+              facebook: <Facebook className="w-3.5 h-3.5" />,
+              instagram: <ExternalLink className="w-3.5 h-3.5" />,
+            }[channel?.type];
+
+            return (
+              <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Globe className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <a href={publishedSiteUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-primary truncate hover:underline max-w-[220px]">
+                    {publishedSiteUrl}
+                  </a>
+                </div>
+                <div className="flex items-center gap-2">
+                  {channel ? (
+                    <>
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        {channelIcon} {channel.label}
+                      </span>
+                      <Button
+                        size="sm"
+                        onClick={handleSendSite}
+                        disabled={isSendingSite || siteSentSuccess}
+                        className="h-7 text-xs bg-[#00d4aa] text-black hover:bg-[#00d4aa]/90 font-semibold"
+                      >
+                        {isSendingSite ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                        {siteSentSuccess ? "Inviato ✓" : "Invia sito"}
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground">Nessun canale disponibile</span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         <CRMSection
@@ -728,6 +832,10 @@ export default function BusinessDetail() {
         businessId={business.id}
         onRegenerate={handleGenerateWebsite}
         isRegenerating={isGeneratingWebsite}
+        onPublished={(url, screenshotUrl) => {
+          setPublishedSiteUrl(url);
+          setPublishedScreenshotUrl(screenshotUrl);
+        }}
       />
     </div>
   );

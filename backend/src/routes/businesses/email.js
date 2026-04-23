@@ -62,12 +62,17 @@ router.post("/:id/send-email", async (req, res) => {
     });
   }
 
+  const { websiteUrl, screenshotUrl } = req.body;
+
   try {
     const { trackingToken } = await sendOutreachEmail({
       businessId: id,
       toEmail,
       subject,
       body: generatedEmail,
+      businessName: req.business?.name,
+      websiteUrl: websiteUrl || null,
+      screenshotUrl: screenshotUrl || null,
     });
 
     repo.markEmailSent(id, req.userId);
