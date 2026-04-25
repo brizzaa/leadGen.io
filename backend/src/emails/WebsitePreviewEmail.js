@@ -125,13 +125,15 @@ function WebsitePreviewEmail({ businessName, emailBody, websiteUrl, screenshotCi
         // ── Footer ────────────────────────────────────────────
         h(Section, { style: { padding: "24px 40px", borderTop: "1px solid #e5e7eb" } },
           h(Text, { style: { fontSize: "11px", color: "#bbb", margin: "0 0 8px", lineHeight: "1.6" } },
-            "Dati raccolti da fonti pubbliche (Google Maps, sito web aziendale). Contatto motivato da legittimo interesse B2B — Art. 6.1.f Reg. UE 2016/679."
+            "Mittente: Luca Brizzante — l.brizzante@leader-gen.com. Dati raccolti da fonti pubbliche (Google Maps, sito web aziendale). Contatto motivato da legittimo interesse B2B ex art. 6.1.f Reg. UE 2016/679. Informativa privacy completa: ",
+            h("a", { href: "https://privacy.leader-gen.com", style: { color: "#888", textDecoration: "underline" } }, "privacy.leader-gen.com"),
+            "."
           ),
           unsubscribeUrl
             ? h(Text, { style: { fontSize: "11px", color: "#999", margin: 0, lineHeight: "1.6" } },
                 "Non vuoi più ricevere queste email? ",
                 h("a", { href: unsubscribeUrl, style: { color: "#666", textDecoration: "underline" } }, "Annulla iscrizione"),
-                "."
+                " (un click, senza ulteriori conferme)."
               )
             : null,
         ),

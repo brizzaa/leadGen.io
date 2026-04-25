@@ -81,7 +81,7 @@ export async function sendOutreachEmail({ businessId, toEmail, subject, body, bu
     replyTo: senderEmail,
     to: toEmail,
     subject: subject || "Richiesta di contatto",
-    text: `${body}\n\n---\nPer non ricevere più queste email: ${unsubscribeUrl}`,
+    text: `${body}\n\n---\nMittente: ${senderName} <${senderEmail}>\nDati raccolti da fonti pubbliche (Google Maps, sito aziendale). Base giuridica: legittimo interesse ex art. 6.1.f Reg. UE 2016/679.\nInformativa privacy: https://privacy.leader-gen.com\nPer non ricevere più queste email (un click): ${unsubscribeUrl}`,
     html,
     attachments,
     headers: {
