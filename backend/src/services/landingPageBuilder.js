@@ -645,8 +645,37 @@ export async function generateWebsiteHtml(biz, style = "auto", engine = "auto") 
   }
 
   // Post-processing: sostituisce immagini placeholder con foto reali
-  const html = await replaceImagesWithReal(rawHtml, biz);
+  let html = await replaceImagesWithReal(rawHtml, biz);
+  // Compliance: i siti contengono dati di terzi raccolti da fonti pubbliche
+  // senza loro consenso. Vanno serviti come noindex + con disclaimer visibile.
+  html = injectComplianceMarkup(html);
   return { html, engine: usedEngine };
+}
+
+/**
+ * Inietta in qualsiasi HTML generato (Vertex / Gemini) i meta robots
+ * noindex,nofollow + un footer disclaimer "Sito demo dimostrativo".
+ * Idempotente: se già presenti, non duplica.
+ */
+function injectComplianceMarkup(html) {
+  const ROBOTS = `<meta name="robots" content="noindex,nofollow,noarchive">\n<meta name="googlebot" content="noindex,nofollow">`;
+  const DISCLAIMER = `<div style="position:fixed;bottom:0;left:0;right:0;background:#fffbe6;border-top:1px solid #d4a72c;padding:10px 16px;font:12px/1.4 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#8b5a00;text-align:center;z-index:99999"><strong>Sito demo dimostrativo</strong> — generato a scopo di valutazione, non affiliato con l'attività menzionata. Per richiederne la rimozione: <a href="mailto:l.brizzante@leader-gen.com" style="color:#8b5a00;text-decoration:underline">l.brizzante@leader-gen.com</a>.</div>`;
+
+  if (!/robots"\s+content="noindex/i.test(html)) {
+    if (/<head[^>]*>/i.test(html)) {
+      html = html.replace(/<head([^>]*)>/i, `<head$1>\n${ROBOTS}`);
+    } else if (/<html[^>]*>/i.test(html)) {
+      html = html.replace(/<html([^>]*)>/i, `<html$1>\n<head>${ROBOTS}</head>`);
+    }
+  }
+  if (!html.includes("Sito demo dimostrativo")) {
+    if (/<\/body>/i.test(html)) {
+      html = html.replace(/<\/body>/i, `${DISCLAIMER}\n</body>`);
+    } else {
+      html += DISCLAIMER;
+    }
+  }
+  return html;
 }
 
 /**

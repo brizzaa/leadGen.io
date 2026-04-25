@@ -358,15 +358,48 @@ const mailer = nodemailer.createTransport(
 // ─── DB ────────────────────────────────────────────────────────────
 function pickBusinesses(n, from) {
   const db = getDb();
+  // Esclude categorie inadatte alla demo "vetrina commerciale": agenzie funebri,
+  // notai, banche, enti pubblici, scuole pubbliche, forze dell'ordine. Sono
+  // settori dove un sito demo non sollecitato suona o offensivo o irrilevante.
   return db.prepare(`
     SELECT b.* FROM businesses b
     WHERE b.is_blacklisted = 0
       AND NOT EXISTS (SELECT 1 FROM campaign_results cr WHERE cr.business_id = b.id AND cr.status = 'sent')
+      AND (b.status IS NULL OR b.status != 'Inviata Mail')
       AND (
         (b.email IS NOT NULL AND b.email != '')
         OR b.instagram_url IS NOT NULL
         OR (b.name IS NOT NULL AND b.area IS NOT NULL)
       )
+      -- ESCLUSIONE PEC: il Garante Privacy ha esplicitamente vietato l'uso
+      -- delle PEC pubblicate su INI-PEC e simili a fini di marketing diretto.
+      -- Provvedimento doc-web 9899880/2023, sanzione tipica 10k€.
+      -- Vedi anche legal/LIA.md §6 (esclusioni esplicite).
+      AND (b.email IS NULL OR (
+        b.email NOT LIKE '%@pec.%'
+        AND b.email NOT LIKE '%legalmail%'
+        AND b.email NOT LIKE '%legal-mail%'
+        AND b.email NOT LIKE '%pecimprese%'
+        AND b.email NOT LIKE '%pec.it%'
+      ))
+      AND (b.category IS NULL OR (
+        b.category NOT LIKE '%funebre%'
+        AND b.category NOT LIKE '%notaio%'
+        AND b.category NOT LIKE '%banca%'
+        AND b.category NOT LIKE '%poste%'
+        AND b.category NOT LIKE '%municipi%'
+        AND b.category NOT LIKE '%comune%'
+        AND b.category NOT LIKE '%chiesa%'
+        AND b.category NOT LIKE '%ospedale%'
+        AND b.category NOT LIKE '%scuola%'
+        AND b.category NOT LIKE '%previdenza%'
+        AND b.category NOT LIKE '%sindacato%'
+        AND b.category NOT LIKE '%carabinier%'
+        AND b.category NOT LIKE '%polizia%'
+        AND b.category NOT LIKE '%vigili del fuoco%'
+        AND b.category NOT LIKE '%ente pubblico%'
+        AND b.category NOT LIKE '%pubblico%'
+      ))
     ORDER BY (b.email IS NOT NULL AND b.email != '') DESC, b.id
     LIMIT ? OFFSET ?
   `).all(n, from);

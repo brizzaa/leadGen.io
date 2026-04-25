@@ -162,6 +162,15 @@ function footer(biz, content) {
 </footer>`;
 }
 
+// Disclaimer obbligatorio per i siti demo: dichiara la natura non-ufficiale
+// del sito (i dati del business sono raccolti da fonti pubbliche senza
+// consenso) e fornisce un canale di contatto per richiederne la rimozione.
+// Inserito automaticamente al fondo di ogni template prima di SHARED_JS.
+const DEMO_DISCLAIMER = `
+<div style="position:fixed;bottom:0;left:0;right:0;background:#fffbe6;border-top:1px solid #d4a72c;padding:10px 16px;font:12px/1.4 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#8b5a00;text-align:center;z-index:99999">
+<strong>Sito demo dimostrativo</strong> — generato a scopo di valutazione, non affiliato con l'attività menzionata. Per richiederne la rimozione: <a href="mailto:l.brizzante@leader-gen.com" style="color:#8b5a00;text-decoration:underline">l.brizzante@leader-gen.com</a>.
+</div>`;
+
 // Shared JS injected at bottom of every template
 const SHARED_JS = `
 <script>
@@ -441,6 +450,8 @@ export async function renderEditorial({ biz, content, palette: p, images }) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="googlebot" content="noindex,nofollow">
 <title>${esc(biz.name)}${content.tagline ? ` — ${esc(content.tagline)}` : ""}</title>
 <meta name="description" content="${esc(content.hero_subtitle || "")}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -700,6 +711,7 @@ ${faqBlock(content.faq)}
 
 ${footer(biz, content)}
 ${floatingCTA(biz)}
+${DEMO_DISCLAIMER}
 ${SHARED_JS}
 </body>
 </html>`;
@@ -749,6 +761,8 @@ export async function renderModern({ biz, content, palette: p, images }) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="googlebot" content="noindex,nofollow">
 <title>${esc(biz.name)}${content.tagline ? ` — ${esc(content.tagline)}` : ""}</title>
 <meta name="description" content="${esc(content.hero_subtitle || "")}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1075,6 +1089,7 @@ ${faqBlock(content.faq)}
 
 ${footer(biz, content)}
 ${floatingCTA(biz)}
+${DEMO_DISCLAIMER}
 ${SHARED_JS}
 </body>
 </html>`;
