@@ -34,6 +34,8 @@ export function getDb() {
         social_last_active TEXT,
         last_social_scan_at DATETIME,
         is_blacklisted INTEGER DEFAULT 0,
+        maps_scan_status TEXT,
+        maps_scanned_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(name, address)
       );
