@@ -164,7 +164,17 @@ function isValidItalianVat(v) {
 }
 
 function extractFromHtml($, html) {
-  const text = $("body").text();
+  // cheerio $("body").text() incolla il testo di elementi inline senza spazio
+  // (es. "info@foo.itTel 0425..." invece di "info@foo.it Tel 0425...").
+  // Inseriamo uno spazio ai boundary case/digit→lettera per evitare che il regex
+  // email catturi il "Tel" / "Cell" / "Fax" come parte del TLD.
+  const rawText = $("body").text();
+  const text = rawText
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")   // itTel → it Tel
+    .replace(/([a-zA-Z])(\d)/g, "$1 $2")     // Tel0425 → Tel 0425
+    // Parole-label italiane spesso concatenate all'email (tutto minuscolo).
+    // Matcha solo se seguite da local-part email → evita di spaccare "info@foo.it".
+    .replace(/\b(contattaci|cellulare|telefono|scrivici|e-mail|email|mail|cell|tel|fax)([a-z0-9_.+-]+@)/gi, "$1 $2");
 
   let email = null;
   $('a[href^="mailto:"]').each((_, el) => {
@@ -275,6 +285,9 @@ async function scrapeContactsPlaywright(baseUrl) {
     for (const pageUrl of pages) {
       try {
         await page.goto(pageUrl, { timeout: 20000, waitUntil: "domcontentloaded" });
+        // Attesa idratazione SPA (React/Vue/etc): domcontentloaded non basta,
+        // il JS deve montare il DOM visibile prima di estrarre.
+        await page.waitForTimeout(2000);
         const html = await page.content();
         const $ = cheerio.load(html);
         $("script, style, noscript").remove();

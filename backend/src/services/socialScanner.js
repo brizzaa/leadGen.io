@@ -5,9 +5,11 @@ import { readFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
+// ROOT = /backend/src (dirname × 2 da /backend/src/services/socialScanner.js)
+// Session files stanno in /backend/, quindi un solo livello su.
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-const IG_SESSION_FILE = join(ROOT, "../../ig-session.json");
-const FB_SESSION_FILE = join(ROOT, "../../fb-session.json");
+const IG_SESSION_FILE = join(ROOT, "../ig-session.json");
+const FB_SESSION_FILE = join(ROOT, "../fb-session.json");
 
 /** Random delay to appear human */
 function randomDelay(min = 2000, max = 5000) {
@@ -292,8 +294,20 @@ function filterEmails(matches) {
   return (matches || []).filter(e => !EMAIL_BLACKLIST.some(b => e.toLowerCase().includes(b)));
 }
 
+// Valida formato telefonico italiano:
+// - mobile: esattamente 10 cifre, prefisso "3"
+// - fisso:  9-11 cifre totali, prefisso "0"
+// - tollera +39 / 0039 iniziale (rimosso prima della validazione)
+// Rifiuta garbage tipo "0907533247757" (13 cifre, spesso ID FB/numerici)
 function filterPhones(matches) {
-  return (matches || []).filter(p => p.replace(/\D/g, "").length >= 9);
+  return (matches || []).filter(p => {
+    let digits = p.replace(/\D/g, "");
+    if (digits.startsWith("0039")) digits = digits.slice(4);
+    else if (digits.startsWith("39") && digits.length > 10) digits = digits.slice(2);
+    if (digits.startsWith("3") && digits.length === 10) return true;   // mobile
+    if (digits.startsWith("0") && digits.length >= 9 && digits.length <= 11) return true; // fisso
+    return false;
+  });
 }
 
 /**
@@ -325,12 +339,18 @@ export async function extractContactsFromWebsite(websiteUrl) {
 
     // Fallback: cerca email nel testo del body
     if (!result.email) {
-      const bodyText = $("body").text();
+      const bodyText = $("body").text()
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/([a-zA-Z])(\d)/g, "$1 $2")
+      .replace(/\b(contattaci|cellulare|telefono|scrivici|e-mail|email|mail|cell|tel|fax)([a-z0-9_.+-]+@)/gi, "$1 $2");
       const emails = filterEmails(bodyText.match(EMAIL_RE));
       if (emails[0]) result.email = emails[0].toLowerCase();
     }
     if (!result.phone) {
-      const bodyText = $("body").text();
+      const bodyText = $("body").text()
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/([a-zA-Z])(\d)/g, "$1 $2")
+      .replace(/\b(contattaci|cellulare|telefono|scrivici|e-mail|email|mail|cell|tel|fax)([a-z0-9_.+-]+@)/gi, "$1 $2");
       const phones = filterPhones(bodyText.match(PHONE_RE));
       if (phones[0]) result.phone = phones[0].trim();
     }
