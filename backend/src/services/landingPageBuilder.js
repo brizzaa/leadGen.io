@@ -633,7 +633,7 @@ export async function generateWebsiteHtml(biz, style = "auto", engine = "auto") 
     }
     if (!rawHtml && process.env.GEMINI_API_KEY) {
       const modelChain = [
-        ["gemini-3.1-flash-lite",   "gemini_flash_lite"],
+        ["gemini-3.1-flash-lite-preview",   "gemini_flash_lite"],
         ["gemini-3.1-pro-preview", "gemini_3_pro"],
         ["gemini-3-flash-preview",  "gemini_3_flash"],
         ["gemini-2.5-pro",          "gemini_pro"],
@@ -668,7 +668,7 @@ export async function generateWebsiteHtml(biz, style = "auto", engine = "auto") 
     rawHtml = await generateWithGemini(biz, style, "gemini-2.5-pro", siteContext);
     usedEngine = "gemini_pro";
   } else if (engine === "gemini_flash_lite") {
-    rawHtml = await generateWithGemini(biz, style, "gemini-3.1-flash-lite", siteContext);
+    rawHtml = await generateWithGemini(biz, style, "gemini-3.1-flash-lite-preview", siteContext);
     usedEngine = "gemini_flash_lite";
   } else {
     rawHtml = await generateWithGemini(biz, style, "gemini-2.5-flash", siteContext);

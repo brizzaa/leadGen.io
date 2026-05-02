@@ -112,7 +112,7 @@ Includi footer GDPR: "Rispondi CANCELLAMI per non ricevere altre comunicazioni."
 Rispondi SOLO con JSON: {"subject": "...", "body": "..."}`;
 
   const response = await axios.post(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiApiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${geminiApiKey}`,
     {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.7, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } },

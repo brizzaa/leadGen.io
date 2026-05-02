@@ -205,7 +205,7 @@ OUTPUT JSON solo.`;
   let last;
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GEMINI_KEY}`,
       { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9, responseMimeType: "application/json", responseSchema: schema, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } } },
       { headers: { "Content-Type": "application/json" }, timeout: 90000 }
     );
@@ -266,7 +266,7 @@ Servizi: ${content.services.map(s => s.title).join(", ")}`;
     required: ["best", "second", "reason"],
   };
   const res = await axios.post(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GEMINI_KEY}`,
     { contents: [{ parts }], generationConfig: { temperature: 0.2, responseMimeType: "application/json", responseSchema: schema, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } } },
     { headers: { "Content-Type": "application/json" }, timeout: 120000 }
   );
@@ -340,7 +340,7 @@ Subject: 40-55 caratteri, curiosità + nome attività, nessun punto esclamativo.
 JSON: {"subject": "...", "body": "..."}`;
 
   const res = await axios.post(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GEMINI_KEY}`,
     { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7, responseMimeType: "application/json", maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } } },
     { headers: { "Content-Type": "application/json" }, timeout: 30000 }
   );
