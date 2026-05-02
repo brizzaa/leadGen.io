@@ -139,6 +139,9 @@ REGOLE ASSOLUTE:
 - VIETATO contact form (non c'è backend che riceve) — usa invece pulsanti "Chiama" (tel:) / "Scrivici" (mailto:)
 - SE un dato non c'è (no email, no social, no rating) OMETTI completamente la sezione/elemento, NON mettere placeholder
 - Metti <title> completo e <meta name="description"> con tagline italiana specifica al business
+- COPY AUTENTICO: VIETATO usare frasi AI-template: "leverage", "ottimizza la tua esperienza", "all'avanguardia", "soluzioni su misura", "innovativo", "eccellenza", "passione per", "con cura", "su misura", "qualità superiore". Scrivi solo fatti concreti specifici a questo business.
+- VIETATO em-dash (—) in più di 1 occorrenza nel testo totale. Usa frasi brevi.
+- Headline hero: massimo 8 parole.
 
 IMMAGINI: <img src="https://picsum.photos/1200/800?random=N" alt="..."> (sostituite post-build). Alt tag italiani descrittivi.
 
@@ -550,15 +553,35 @@ All text in Italian. Tailwind CSS. Unique non-generic design. Show real contact 
   return html;
 }
 
+const AI_PATTERNS = [
+  "leverage", "ottimizza la tua esperienza", "all'avanguardia", "soluzioni su misura",
+  "innovativo", "eccellenza", "passione per", "con cura", "su misura", "qualità superiore",
+];
+
+function critiqueHtml(html, biz) {
+  const lower = html.toLowerCase();
+  const issues = [];
+  for (const pattern of AI_PATTERNS) {
+    if (lower.includes(pattern.toLowerCase())) {
+      issues.push(`Frase AI generica: "${pattern}"`);
+    }
+  }
+  const emDashCount = (html.match(/—/g) || []).length;
+  if (emDashCount > 3) issues.push(`Troppi em-dash (${emDashCount}), max 3`);
+  if (biz.name && !html.includes(biz.name)) issues.push(`Nome business "${biz.name}" non trovato`);
+  if (biz.phone && !html.includes(biz.phone)) issues.push(`Telefono mancante`);
+  return { approved: issues.length === 0, issues };
+}
+
 /**
  * Genera HTML via Gemini API.
  */
-async function generateWithGemini(biz, style, model = "gemini-2.5-pro", siteContext = null) {
+async function generateWithGemini(biz, style, model = "gemini-2.5-pro", siteContext = null, promptOverride = null) {
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (!geminiApiKey) throw new Error("GEMINI_API_KEY non configurata");
 
   const { default: axios } = await import("axios");
-  const prompt = buildWebsitePrompt(biz, style, siteContext);
+  const prompt = promptOverride || buildWebsitePrompt(biz, style, siteContext);
 
   let response;
   try {
@@ -620,6 +643,13 @@ export async function generateWebsiteHtml(biz, style = "auto", engine = "auto") 
         try {
           rawHtml = await generateWithGemini(biz, style, model, siteContext);
           usedEngine = key;
+          const critique = critiqueHtml(rawHtml, biz);
+          if (!critique.approved) {
+            console.warn(`[critique] ${critique.issues.join("; ")} — regenerating`);
+            const refinedPrompt = buildWebsitePrompt(biz, style, siteContext) +
+              `\n\nCORREGGI QUESTI PROBLEMI:\n${critique.issues.map(i => `- ${i}`).join("\n")}`;
+            rawHtml = await generateWithGemini(biz, style, model, null, refinedPrompt);
+          }
           break;
         } catch (e) {
           console.warn(`[generate-website] ${model} fallito:`, e.message);
