@@ -9,25 +9,49 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export class EmailCredentialsError extends Error {}
 
-function buildTransporter() {
-  // Brevo SMTP — reputazione molto migliore di Gmail per cold outreach
+function buildTransporter(businessId = 0) {
+  if (process.env.BREVO_SMTP_ACCOUNTS) {
+    let accounts;
+    try {
+      accounts = JSON.parse(process.env.BREVO_SMTP_ACCOUNTS);
+    } catch {
+      throw new Error("BREVO_SMTP_ACCOUNTS non è JSON valido");
+    }
+    if (!accounts.length) throw new Error("BREVO_SMTP_ACCOUNTS è vuoto");
+    const account = accounts[businessId % accounts.length];
+    return {
+      transport: nodemailer.createTransport({
+        host: "smtp-relay.brevo.com",
+        port: 587,
+        secure: false,
+        auth: { user: account.user, pass: account.pass },
+      }),
+      fromAddress: account.from,
+    };
+  }
   if (process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_KEY) {
-    return nodemailer.createTransport({
-      host: "smtp-relay.brevo.com",
-      port: 587,
-      secure: false,
-      auth: { user: process.env.BREVO_SMTP_USER, pass: process.env.BREVO_SMTP_KEY },
-    });
+    return {
+      transport: nodemailer.createTransport({
+        host: "smtp-relay.brevo.com",
+        port: 587,
+        secure: false,
+        auth: { user: process.env.BREVO_SMTP_USER, pass: process.env.BREVO_SMTP_KEY },
+      }),
+      fromAddress: `"${process.env.MY_NAME || "Studio Web"}" <${process.env.EMAIL_USER}>`,
+    };
   }
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     throw new EmailCredentialsError(
       "Credenziali email non configurate nel file .env. Aggiungi BREVO_SMTP_USER + BREVO_SMTP_KEY oppure EMAIL_USER + EMAIL_PASS.",
     );
   }
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-  });
+  return {
+    transport: nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+    }),
+    fromAddress: `"${process.env.MY_NAME || "Studio Web"}" <${process.env.EMAIL_USER}>`,
+  };
 }
 
 function trackingPixelTag(token) {
@@ -46,7 +70,7 @@ function registerTrackingToken(businessId) {
 }
 
 export async function sendOutreachEmail({ businessId, toEmail, subject, body, businessName, websiteUrl, screenshotPath }) {
-  const transporter = buildTransporter();
+  const { transport: transporter, fromAddress } = buildTransporter(businessId);
   const token = registerTrackingToken(businessId);
   const screenshotCid = "website-preview";
   const senderName = process.env.MY_NAME || "Studio Web";
@@ -77,7 +101,7 @@ export async function sendOutreachEmail({ businessId, toEmail, subject, body, bu
     : [];
 
   await transporter.sendMail({
-    from: `"${senderName}" <${senderEmail}>`,
+    from: fromAddress,
     replyTo: senderEmail,
     to: toEmail,
     subject: subject || "Richiesta di contatto",
