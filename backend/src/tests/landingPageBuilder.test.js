@@ -127,4 +127,15 @@ describe("WEBSITE_ENGINES", () => {
     expect(WEBSITE_ENGINES).toHaveProperty("gemini_flash_lite");
     expect(WEBSITE_ENGINES.gemini_flash_lite.label).toContain("3.1");
   });
+
+  it("contiene tutti gli engine richiesti inclusi legacy", () => {
+    expect(WEBSITE_ENGINES).toHaveProperty("gemini_3_pro");
+    expect(WEBSITE_ENGINES).toHaveProperty("gemini_pro");
+    expect(WEBSITE_ENGINES).toHaveProperty("gemini_flash");
+    expect(WEBSITE_ENGINES).toHaveProperty("gemini_flash_lite");
+  });
+
+  it("gemini_flash_lite ha desc aggiornata come modello principale", () => {
+    expect(WEBSITE_ENGINES.gemini_flash_lite.desc).toContain("principale");
+  });
 });

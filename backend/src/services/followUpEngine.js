@@ -118,7 +118,7 @@ Rispondi SOLO con JSON: {"subject": "...", "body": "..."}`;
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiApiKey}`,
     {
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.7, responseMimeType: "application/json" },
+      generationConfig: { temperature: 0.7, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } },
     },
     { headers: { "Content-Type": "application/json" }, timeout: 30000 }
   );
