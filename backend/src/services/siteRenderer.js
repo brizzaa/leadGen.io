@@ -125,6 +125,17 @@ function floatingCTA(biz) {
 </a>`;
 }
 
+function mobileStickyBar(biz) {
+  if (!biz.phone && !biz.email) return "";
+  const callBtn = biz.phone
+    ? `<a href="tel:${esc(biz.phone)}" class="mbst-btn mbst-call"><i data-lucide="phone"></i>Chiama</a>`
+    : "";
+  const mailBtn = biz.email
+    ? `<a href="mailto:${esc(biz.email)}" class="mbst-btn mbst-mail"><i data-lucide="mail"></i>Scrivici</a>`
+    : "";
+  return `<div class="mbst" role="toolbar" aria-label="Contattaci">${callBtn}${mailBtn}</div>`;
+}
+
 // Social icon buttons
 function socialBtns(biz) {
   const wa = biz.phone ? `https://wa.me/${biz.phone.replace(/\D/g, "")}` : null;
@@ -404,6 +415,16 @@ details[open] .faq-icon { transform:rotate(45deg) }
   .footer-in { grid-template-columns:1fr }
   .footer-bot { flex-direction:column; gap:16px; text-align:center }
   .float-cta { bottom:20px; right:20px; width:48px; height:48px }
+}
+
+/* ── MOBILE STICKY CTA ── */
+.mbst { display:none }
+@media (max-width:640px) {
+  .mbst { display:flex; position:fixed; bottom:44px; left:0; right:0; z-index:9998; box-shadow:0 -2px 16px rgba(0,0,0,.12) }
+  .mbst-btn { flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:14px 12px; font-size:.82rem; font-weight:600; text-decoration:none; color:#fff }
+  .mbst-call { background:var(--primary) }
+  .mbst-mail { background:rgba(0,0,0,.75) }
+  .mbst [data-lucide] { stroke:#fff; width:16px; height:16px; stroke-width:2 }
 }`;
 }
 
@@ -456,6 +477,7 @@ export async function renderEditorial({ biz, content, palette: p, images }) {
 <meta name="description" content="${esc(content.hero_subtitle || "")}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+${img0 ? `<link rel="preload" as="image" href="${esc(img0)}" fetchpriority="high">` : ""}
 ${LUCIDE}
 <style>
 :root {
@@ -641,7 +663,7 @@ ${sharedCSS(p, rgb, bgRgb)}
 </nav>
 
 <section class="hero">
-  ${img0 ? `<img src="${esc(img0)}" alt="${esc(biz.name)}" class="hero-bg">` : `<div class="hero-solid"></div>`}
+  ${img0 ? `<img src="${esc(img0)}" alt="${esc(biz.name)}" class="hero-bg" loading="eager" fetchpriority="high">` : `<div class="hero-solid"></div>`}
   <div class="hero-ov"></div>
   <div class="hero-c">
     <div class="hero-badge">
@@ -710,6 +732,7 @@ ${faqBlock(content.faq)}
 </section>
 
 ${footer(biz, content)}
+${mobileStickyBar(biz)}
 ${floatingCTA(biz)}
 ${DEMO_DISCLAIMER}
 ${SHARED_JS}
@@ -767,6 +790,7 @@ export async function renderModern({ biz, content, palette: p, images }) {
 <meta name="description" content="${esc(content.hero_subtitle || "")}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+${img0 ? `<link rel="preload" as="image" href="${esc(img0)}" fetchpriority="high">` : ""}
 ${LUCIDE}
 <style>
 :root {
@@ -1000,7 +1024,7 @@ a.contact-label:hover { color:var(--accent) }
   </div>
   <div class="hero-img-w reveal">
     ${img0
-      ? `<img src="${esc(img0)}" alt="${esc(biz.name)}">`
+      ? `<img src="${esc(img0)}" alt="${esc(biz.name)}" loading="eager" fetchpriority="high">`
       : `<div class="hero-img-ph">${esc((biz.name || "").slice(0, 2).toUpperCase())}</div>`}
     ${biz.area ? `<div class="hero-location"><i data-lucide="map-pin"></i>${esc(biz.area)}</div>` : ""}
   </div>
@@ -1088,6 +1112,7 @@ ${faqBlock(content.faq)}
 </section>
 
 ${footer(biz, content)}
+${mobileStickyBar(biz)}
 ${floatingCTA(biz)}
 ${DEMO_DISCLAIMER}
 ${SHARED_JS}
