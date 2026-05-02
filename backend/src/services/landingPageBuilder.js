@@ -567,7 +567,7 @@ function critiqueHtml(html, biz) {
     }
   }
   const emDashCount = (html.match(/—/g) || []).length;
-  if (emDashCount > 3) issues.push(`Troppi em-dash (${emDashCount}), max 3`);
+  if (emDashCount > 1) issues.push(`Troppi em-dash (${emDashCount}), max 1`);
   if (biz.name && !html.includes(biz.name)) issues.push(`Nome business "${biz.name}" non trovato`);
   if (biz.phone && !html.includes(biz.phone)) issues.push(`Telefono mancante`);
   return { approved: issues.length === 0, issues };

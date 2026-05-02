@@ -9,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export class EmailCredentialsError extends Error {}
 
-function buildTransporter(businessId = 0) {
+export function buildTransporter(businessId = 0) {
   if (process.env.BREVO_SMTP_ACCOUNTS) {
     let accounts;
     try {

@@ -1,6 +1,6 @@
 import { getDb } from "../config/db.js";
 import { generateWebsiteHtml, makeSlug, deployToNetlify } from "./landingPageBuilder.js";
-import nodemailer from "nodemailer";
+import { buildTransporter } from "./mailer.js";
 import crypto from "crypto";
 import axios from "axios";
 
@@ -122,10 +122,6 @@ Rispondi SOLO con JSON: {"subject": "...", "body": "..."}`;
 
   const emailContent = JSON.parse(response.data.candidates[0].content.parts[0].text);
 
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    throw new Error("Credenziali email non configurate");
-  }
-
   // Tracking pixel
   const db = getDb();
   const trackingToken = crypto.randomBytes(16).toString("hex");
@@ -134,17 +130,18 @@ Rispondi SOLO con JSON: {"subject": "...", "body": "..."}`;
   const baseUrl = process.env.BASE_URL || "http://localhost:3001";
   const pixel = `<img src="${baseUrl}/api/track/${trackingToken}" width="1" height="1" style="display:none" alt="" />`;
 
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-  });
+  const { transport: transporter, fromAddress } = buildTransporter(fu.business_id);
 
   await transporter.sendMail({
-    from: process.env.EMAIL_USER,
+    from: fromAddress,
     to: fu.email,
     subject: emailContent.subject || `Follow-up: proposta per ${fu.name}`,
     html: `<div style="font-family:sans-serif;line-height:1.6;color:#333">${emailContent.body}${pixel}</div>`,
     text: emailContent.body.replace(/<[^>]+>/g, ""),
+    headers: {
+      "List-Unsubscribe": `<mailto:${process.env.EMAIL_USER || "l.brizzante@leader-gen.com"}?subject=Unsubscribe>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
   });
 
   // Log attività
