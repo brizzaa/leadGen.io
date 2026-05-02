@@ -122,4 +122,9 @@ describe("WEBSITE_ENGINES", () => {
       expect(engine.label.length).toBeGreaterThan(0);
     }
   });
+
+  it("contiene gemini_flash_lite con label aggiornata a 3.1", () => {
+    expect(WEBSITE_ENGINES).toHaveProperty("gemini_flash_lite");
+    expect(WEBSITE_ENGINES.gemini_flash_lite.label).toContain("3.1");
+  });
 });

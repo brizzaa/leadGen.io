@@ -65,7 +65,7 @@ export const WEBSITE_ENGINES = {
   gemini_3_pro: { label: "Gemini 3.1 Pro", desc: "Migliore qualità design, modello più recente" },
   gemini_pro: { label: "Gemini 2.5 Pro", desc: "Alta qualità, stabile" },
   gemini_flash: { label: "Gemini 2.5 Flash", desc: "Veloce, economico" },
-  gemini_flash_lite: { label: "Gemini 2.5 Flash Lite", desc: "Più veloce e leggero" },
+  gemini_flash_lite: { label: "Gemini 3.1 Flash-Lite", desc: "Più veloce e leggero — modello principale" },
 };
 
 /**
@@ -564,7 +564,7 @@ async function generateWithGemini(biz, style, model = "gemini-2.5-pro", siteCont
   try {
     response = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
-      { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1, maxOutputTokens: 16384 } },
+      { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1, maxOutputTokens: 16384, thinkingConfig: { thinkingBudget: 0 } } },
       { headers: { "Content-Type": "application/json" }, timeout: 120000 },
     );
   } catch (e) {
@@ -610,6 +610,7 @@ export async function generateWebsiteHtml(biz, style = "auto", engine = "auto") 
     }
     if (!rawHtml && process.env.GEMINI_API_KEY) {
       const modelChain = [
+        ["gemini-3.1-flash-lite",   "gemini_flash_lite"],
         ["gemini-3.1-pro-preview", "gemini_3_pro"],
         ["gemini-3-flash-preview",  "gemini_3_flash"],
         ["gemini-2.5-pro",          "gemini_pro"],
@@ -637,7 +638,7 @@ export async function generateWebsiteHtml(biz, style = "auto", engine = "auto") 
     rawHtml = await generateWithGemini(biz, style, "gemini-2.5-pro", siteContext);
     usedEngine = "gemini_pro";
   } else if (engine === "gemini_flash_lite") {
-    rawHtml = await generateWithGemini(biz, style, "gemini-2.5-flash-lite", siteContext);
+    rawHtml = await generateWithGemini(biz, style, "gemini-3.1-flash-lite", siteContext);
     usedEngine = "gemini_flash_lite";
   } else {
     rawHtml = await generateWithGemini(biz, style, "gemini-2.5-flash", siteContext);
