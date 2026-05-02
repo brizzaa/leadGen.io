@@ -4,8 +4,8 @@ import nodemailer from "nodemailer";
 import crypto from "crypto";
 import axios from "axios";
 
-const MAX_FOLLOW_UPS = 3;
-const FOLLOW_UP_DELAYS_DAYS = [3, 7, 14]; // step 1 dopo 3gg, step 2 dopo 7gg, step 3 dopo 14gg
+const MAX_FOLLOW_UPS = 1;
+const FOLLOW_UP_DELAYS_DAYS = [3];
 
 /**
  * Schedula follow-up per un business dopo invio email iniziale.
@@ -102,14 +102,11 @@ async function sendFollowUpEmail(fu) {
   const myName = process.env.MY_NAME || "Il team LeadGen";
   const stepTexts = {
     1: "un gentile promemoria alla prima email",
-    2: "un secondo follow-up più breve e diretto",
-    3: "un ultimo tentativo cordiale di contatto",
   };
 
   const prompt = `Scrivi ${stepTexts[fu.step] || "un follow-up"} per "${fu.name}" (${fu.category || "attività locale"} a ${fu.area || "Italia"}).
-Questo è il follow-up #${fu.step} di 3. Il tono deve essere progressivamente più conciso.
-Step 1: gentile reminder. Step 2: breve e diretto. Step 3: ultimo tentativo, rispettoso.
-Max ${fu.step === 1 ? 80 : fu.step === 2 ? 60 : 40} parole.
+Questo è un gentile follow-up al primo messaggio. Tono professionale e rispettoso.
+Max 80 parole.
 Firma come "${myName}".
 Includi footer GDPR: "Rispondi CANCELLAMI per non ricevere altre comunicazioni."
 Rispondi SOLO con JSON: {"subject": "...", "body": "..."}`;
