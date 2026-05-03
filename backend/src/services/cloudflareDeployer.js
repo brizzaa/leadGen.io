@@ -43,8 +43,15 @@ export function siteUrl(slug) {
   return `https://${slug}.${process.env.CF_DOMAIN}`;
 }
 
+// Cloudflare R2 API rifiuta path con `..` come path traversal (anche dentro
+// nomi file legittimi: i bundle Next.js 16 + Turbopack producono nomi come
+// `0.3lvko0_b_y..js`). encodeURI non tocca i punti; serve codifica per segmenti.
+function encodeR2Key(key) {
+  return key.split("/").map(seg => encodeURIComponent(seg)).join("/");
+}
+
 export async function uploadObject(key, body, contentType = "text/html; charset=utf-8") {
-  const r = await api().put(`/objects/${encodeURI(key)}`, body, {
+  const r = await api().put(`/objects/${encodeR2Key(key)}`, body, {
     headers: { "Content-Type": contentType },
   });
   if (r.status >= 400) {
